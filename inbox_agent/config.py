@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     
     # Notion API Configuration
     NOTION_TOKEN: str
-    NOTION_DATABASE_ID: str
+    NOTION_PROJECTS_DATABASE_ID: str
     NOTION_PROJECTS_DATA_SOURCE_ID: str
     NOTION_TASKS_DATA_SOURCE_ID: str
     NOTION_INBOX_PAGE_ID: str

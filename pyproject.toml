@@ -30,4 +30,6 @@ packages = ["inbox_agent"]
 testpaths = ["tests"]
 addopts = ["-ra", "--strict-markers"]
 markers = [
+    "integration: mark test as integration test (requires API access)",
+    "unit: mark test as unit test (no external dependencies)",
 ]

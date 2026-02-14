@@ -15,14 +15,14 @@ class TestSettings:
         """Test that settings load from environment variables."""
         with patch.dict('os.environ', {
             'NOTION_TOKEN': 'test_token_123',
-            'NOTION_DATABASE_ID': 'db_123',
+            'NOTION_PROJECTS_DATABASE_ID': 'db_123',
             'NOTION_PROJECTS_DATA_SOURCE_ID': 'ds_123',
             'NOTION_INBOX_PAGE_ID': 'page_123'
         }):
             test_settings = Settings()
             
             assert test_settings.NOTION_TOKEN == 'test_token_123'
-            assert test_settings.NOTION_DATABASE_ID == 'db_123'
+            assert test_settings.NOTION_PROJECTS_DATABASE_ID == 'db_123'
             assert test_settings.NOTION_PROJECTS_DATA_SOURCE_ID == 'ds_123'
             assert test_settings.NOTION_INBOX_PAGE_ID == 'page_123'
     
@@ -48,7 +48,7 @@ class TestSettingsIntegration:
         """Test loading actual settings from .env file."""
         # This assumes .env file exists in project root
         assert settings.NOTION_TOKEN
-        assert settings.NOTION_DATABASE_ID
+        assert settings.NOTION_PROJECTS_DATABASE_ID
         assert settings.NOTION_PROJECTS_DATA_SOURCE_ID
         assert settings.NOTION_INBOX_PAGE_ID
     
@@ -65,7 +65,7 @@ class TestSettingsIntegration:
         assert token.startswith('ntn_') or token.startswith('secret_')
 
         ids = [
-            settings.NOTION_DATABASE_ID,
+            settings.NOTION_PROJECTS_DATABASE_ID,
             settings.NOTION_PROJECTS_DATA_SOURCE_ID,
             settings.NOTION_TASKS_DATA_SOURCE_ID,
             settings.NOTION_INBOX_PAGE_ID
@@ -80,7 +80,7 @@ class TestSettingsIntegration:
         client = Client(auth=settings.NOTION_TOKEN)
         assert isinstance(client, Client)
         
-        database = client.databases.retrieve(settings.NOTION_DATABASE_ID)
+        database = client.databases.retrieve(settings.NOTION_PROJECTS_DATABASE_ID)
         assert database['object'] == 'database'
         
         data_source = client.data_sources.retrieve(settings.NOTION_PROJECTS_DATA_SOURCE_ID)

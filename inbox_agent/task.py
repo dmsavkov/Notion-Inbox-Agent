@@ -34,9 +34,9 @@ class TaskManager:
         
         # Create page
         try:
-            # ELABORATION PAGE USED FOR NOW. SHOULD BE TASK DB WITH RELATION TO PROJECTS LATER
+            # Create task in task database
             page = self.notion_client.pages.create(
-                parent={"page_id": settings.NOTION_ELABORATION_PAGE_ID},
+                parent={"type": "data_source_id", "data_source_id": settings.NOTION_TASKS_DATA_SOURCE_ID},
                 properties=properties,
                 children=children
             )
@@ -49,7 +49,7 @@ class TaskManager:
             raise
     
     def _build_properties(self, task: NotionTask) -> dict:
-        """Build Notion properties dict"""
+        """Build Notion properties dict matching the actual Notion database schema"""
         properties = {
             "Name": {
                 "title": [
@@ -60,47 +60,50 @@ class TaskManager:
                     }
                 ]
             },
-            "AI Use": {
+            "Importance": {
                 "select": {
-                    "name": task.ai_use_status.value
+                    "name": str(task.importance)
                 }
             },
-            "Importance": {
-                "number": task.importance
-            },
             "Urgency": {
-                "number": task.urgency
+                "select": {
+                    "name": str(task.urgency)
+                }
             },
-            "Impact": {
+            "Impact Score": {
                 "number": task.impact
             },
-            "Confidence": {
-                "number": task.confidence
+            "UseAIStatus": {
+                "select": {
+                    "name": task.ai_use_status.value.lower()
+                }
+            },
+            "Status": {
+                "status": {
+                    "name": "Not started" # Default status for new tasks
+                }
             }
         }
         
-        # Add projects as relation (if field exists)
+        # Add project relation (singular, use first project if available)
         if task.projects:
-            # Query project IDs
-            project_ids = []
-            for project_name in task.projects:
-                try:
-                    results = self.notion_client.databases.query(
-                        database_id=settings.NOTION_DATA_SOURCE_ID,
-                        filter={
-                            "property": "Name",
-                            "title": {"equals": project_name}
-                        }
-                    )
-                    if results["results"]:
-                        project_ids.append({"id": results["results"][0]["id"]})
-                except Exception as e:
-                    logger.warning(f"Could not find project {project_name}: {e}")
-            
-            if project_ids:
-                properties["Projects"] = {
-                    "relation": project_ids
-                }
+            # Query project ID for the first project
+            project_name = task.projects[0]
+            try:
+                results = self.notion_client.data_sources.query(
+                    settings.NOTION_PROJECTS_DATA_SOURCE_ID,
+                    filter={
+                        "property": "Name",
+                        "title": {"equals": project_name}
+                    }
+                )
+                if results["results"]:
+                    properties["Project"] = {
+                        "relation": [{"id": results["results"][0]["id"]}]
+                    }
+                    logger.debug(f"Linked task to project: {project_name}")
+            except Exception as e:
+                logger.warning(f"Could not find project {project_name}: {e}")
         
         return properties
     
@@ -123,18 +126,18 @@ class TaskManager:
             )
             blocks.extend(enrichment_blocks)
         
-        # Metadata callout
-        metadata_text = f"""
-**Confidence**: {task.confidence:.2f}"""
-        
-        blocks.append({
-            "object": "block",
-            "type": "callout",
-            "callout": {
-                "rich_text": [{"type": "text", "text": {"content": metadata_text}}],
-                "icon": {"emoji": "🤖"}
-            }
-        })
+        # Metadata callout (only if confidence exists)
+        if task.confidence is not None:
+            metadata_text = f"**Confidence**: {task.confidence:.2f}"
+            
+            blocks.append({
+                "object": "block",
+                "type": "callout",
+                "callout": {
+                    "rich_text": [{"type": "text", "text": {"content": metadata_text}}],
+                    "icon": {"emoji": "🤖"}
+                }
+            })
         
         return blocks
     
