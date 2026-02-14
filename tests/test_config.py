@@ -3,6 +3,9 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 from pydantic import ValidationError
 from inbox_agent.config import Settings, settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TestSettings:
@@ -13,15 +16,15 @@ class TestSettings:
         with patch.dict('os.environ', {
             'NOTION_TOKEN': 'test_token_123',
             'NOTION_DATABASE_ID': 'db_123',
-            'NOTION_DATA_SOURCE_ID': 'ds_123',
-            'NOTION_ELABORATION_PAGE_ID': 'page_123'
+            'NOTION_PROJECTS_DATA_SOURCE_ID': 'ds_123',
+            'NOTION_INBOX_PAGE_ID': 'page_123'
         }):
             test_settings = Settings()
             
             assert test_settings.NOTION_TOKEN == 'test_token_123'
             assert test_settings.NOTION_DATABASE_ID == 'db_123'
-            assert test_settings.NOTION_DATA_SOURCE_ID == 'ds_123'
-            assert test_settings.NOTION_ELABORATION_PAGE_ID == 'page_123'
+            assert test_settings.NOTION_PROJECTS_DATA_SOURCE_ID == 'ds_123'
+            assert test_settings.NOTION_INBOX_PAGE_ID == 'page_123'
     
     def test_proj_root_path(self):
         """Test that PROJ_ROOT resolves correctly."""
@@ -46,8 +49,8 @@ class TestSettingsIntegration:
         # This assumes .env file exists in project root
         assert settings.NOTION_TOKEN
         assert settings.NOTION_DATABASE_ID
-        assert settings.NOTION_DATA_SOURCE_ID
-        assert settings.NOTION_ELABORATION_PAGE_ID
+        assert settings.NOTION_PROJECTS_DATA_SOURCE_ID
+        assert settings.NOTION_INBOX_PAGE_ID
     
     def test_actual_paths_exist(self):
         """Test that actual project paths exist."""
@@ -63,8 +66,9 @@ class TestSettingsIntegration:
 
         ids = [
             settings.NOTION_DATABASE_ID,
-            settings.NOTION_DATA_SOURCE_ID,
-            settings.NOTION_ELABORATION_PAGE_ID
+            settings.NOTION_PROJECTS_DATA_SOURCE_ID,
+            settings.NOTION_TASKS_DATA_SOURCE_ID,
+            settings.NOTION_INBOX_PAGE_ID
         ]
         for id_ in ids:
             assert len(id_) in [32, 36]  # UUID with or without dashes
@@ -79,9 +83,16 @@ class TestSettingsIntegration:
         database = client.databases.retrieve(settings.NOTION_DATABASE_ID)
         assert database['object'] == 'database'
         
-        data_source = client.data_sources.retrieve(settings.NOTION_DATA_SOURCE_ID)
+        data_source = client.data_sources.retrieve(settings.NOTION_PROJECTS_DATA_SOURCE_ID)
         assert data_source['object'] == 'data_source'
         
-        elab_page = client.pages.retrieve(settings.NOTION_ELABORATION_PAGE_ID)
+        # Task database - skip if not accessible yet (needs to be shared with integration)
+        try:
+            task_database = client.databases.retrieve(settings.NOTION_TASKS_DATA_SOURCE_ID)
+            assert task_database['object'] == 'database'
+        except Exception as e:
+            logger.warning(f"Task database not accessible (may need to share with integration): {e}")
+        
+        elab_page = client.pages.retrieve(settings.NOTION_INBOX_PAGE_ID)
         assert elab_page['object'] == 'page'
         

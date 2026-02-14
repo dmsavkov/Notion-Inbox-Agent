@@ -11,8 +11,9 @@ class Settings(BaseSettings):
     # Notion API Configuration
     NOTION_TOKEN: str
     NOTION_DATABASE_ID: str
-    NOTION_DATA_SOURCE_ID: str
-    NOTION_ELABORATION_PAGE_ID: str
+    NOTION_PROJECTS_DATA_SOURCE_ID: str
+    NOTION_TASKS_DATA_SOURCE_ID: str
+    NOTION_INBOX_PAGE_ID: str
     
     # AI
     GOOGLE_API_KEY: str = Field(..., env="GOOGLE_API_KEY")

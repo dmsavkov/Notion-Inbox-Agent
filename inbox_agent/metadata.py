@@ -64,7 +64,7 @@ class MetadataProcessor:
             JSON string of project titles
         """
         try:
-            projects_pages = get_all_pages(self.notion_client, settings.NOTION_DATA_SOURCE_ID)
+            projects_pages = get_all_pages(self.notion_client, settings.NOTION_PROJECTS_DATA_SOURCE_ID)
             logger.debug(f"Retrieved {len(projects_pages)} project pages from Notion")
             
             all_titles = [
@@ -152,7 +152,7 @@ Return ONLY valid JSON:
         # Get all project pages from data source
         try:
             # Putting try except pollutes the implementation code, so it may be better to ues it here
-            all_project_pages = get_all_pages(self.notion_client, settings.NOTION_DATA_SOURCE_ID)
+            all_project_pages = get_all_pages(self.notion_client, settings.NOTION_PROJECTS_DATA_SOURCE_ID)
         except Exception as e:
             logger.error(f"Failed to fetch projects from data source: {e}", exc_info=True)
             return metadata
