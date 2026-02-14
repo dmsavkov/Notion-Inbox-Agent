@@ -1,6 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal, Optional
 from enum import Enum
+import openai
+
+from inbox_agent.config import settings
 
 
 '''class NoteClassification(BaseModel):
@@ -35,12 +38,25 @@ class AIUseStatus(str, Enum):
 
 # ========== Configuration Models ==========
 
+class OpenAIClientConfig(BaseModel):
+    """OpenAI client connection configuration"""
+    base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: str = settings.GOOGLE_API_KEY
+
 class ModelConfig(BaseModel):
     """LLM model configuration"""
-    model_name: str = "gemini-2-5-flash"
+    model_name: str = "gemma-3-27b-it"
     temperature: float = 0.5
     top_p: float = 0.9
     reasoning_effort: Optional[str] = None
+    client_config: OpenAIClientConfig = Field(default_factory=lambda: OpenAIClientConfig())
+    
+    def get_client(self) -> openai.OpenAI:
+        """Instantiate OpenAI client based on configuration"""
+        return openai.OpenAI(
+            base_url=self.client_config.base_url,
+            api_key=self.client_config.api_key
+        )
 
 class MetadataConfig(BaseModel):
     """Configuration for metadata module"""
