@@ -184,7 +184,7 @@ def get_block_plain_text(block):
     return ''
 
 def extract_property_value(prop):
-    """Extract plain text value from a Notion property."""
+    """Extract plain text value from any Notion property."""
     if not prop or not isinstance(prop, dict):
         return None
     
