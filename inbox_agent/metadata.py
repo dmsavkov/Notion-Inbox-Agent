@@ -5,7 +5,7 @@ from inbox_agent.pydantic_models import (
     MetadataConfig, ModelConfig, ActionType
 )
 from inbox_agent.config import settings
-from inbox_agent.notion import get_all_pages, get_block_plain_text
+from inbox_agent.notion import get_all_pages, get_block_plain_text, extract_property_value
 from inbox_agent.utils import call_llm_with_json_response
 import json
 
@@ -149,37 +149,45 @@ Return ONLY valid JSON:
         """Fetch and preprocess metadata for projects"""
         metadata = {}
         
+        # Get all project pages from data source
+        try:
+            # Putting try except pollutes the implementation code, so it may be better to ues it here
+            all_project_pages = get_all_pages(self.notion_client, settings.NOTION_DATA_SOURCE_ID)
+        except Exception as e:
+            logger.error(f"Failed to fetch projects from data source: {e}", exc_info=True)
+            return metadata
+        
+        # Build a map of project titles to pages for quick lookup
+        project_map = {}
+        for page in all_project_pages:
+            page_title = get_block_plain_text(page)
+            if page_title:
+                project_map[page_title] = page
+        
+        # Extract metadata for requested projects
         for project_name in project_names:
             try:
-                # Query Notion for project page
-                results = self.notion_client.databases.query(
-                    database_id=settings.NOTION_DATA_SOURCE_ID,
-                    filter={
-                        "property": "Name",
-                        "title": {
-                            "equals": project_name
-                        }
-                    }
-                )
-                
-                if not results["results"]:
+                if project_name not in project_map:
                     logger.warning(f"Project not found: {project_name}")
                     continue
                 
-                page = results["results"][0]
-                props = page["properties"]
+                page = project_map[project_name]
+                props = page.get("properties", {})
                 
-                # Extract only non-empty fields
+                # Extract properties using unified function from notion.py
+                # extract_property_value handles all property type conversions
+                types_val = extract_property_value(props.get("Type"))
+                if not isinstance(types_val, list):
+                    types_val = []
+                
                 project_meta = ProjectMetadata(
                     name=project_name,
-                    priority=self._extract_select(props.get("Priority")),
-                    status=self._extract_status(props.get("Status")),
-                    types=self._extract_multi_select(props.get("Type")),
-                    urgency=self._extract_number(props.get("Urgency")),
-                    importance=self._extract_number(props.get("Importance"))
+                    priority=extract_property_value(props.get("Priority")),  # type: ignore
+                    status=extract_property_value(props.get("Status")),  # type: ignore
+                    types=types_val,  # type: ignore
                 )
                 
-                # Remove None fields to minimize context
+                # Remove None and empty fields to minimize context
                 metadata[project_name] = ProjectMetadata(
                     **{k: v for k, v in project_meta.dict().items() if v is not None and v != [] and v != ""}
                 )
@@ -187,37 +195,12 @@ Return ONLY valid JSON:
                 logger.debug(f"Fetched metadata for {project_name}: {list(metadata[project_name].dict().keys())}")
                 
             except Exception as e:
-                logger.error(f"Failed to fetch metadata for {project_name}: {e}")
+                logger.error(f"Failed to extract metadata for {project_name}: {e}")
         
         return metadata
     
-    def _extract_select(self, prop) -> Optional[str]:
-        """Extract select property value"""
-        if prop and prop.get("select"):
-            return prop["select"].get("name")
-        return None
-    
-    def _extract_status(self, prop) -> Optional[str]:
-        """Extract status property value"""
-        if prop and prop.get("status"):
-            return prop["status"].get("name")
-        return None
-    
-    def _extract_multi_select(self, prop) -> list[str]:
-        """Extract multi-select property values"""
-        if prop and prop.get("multi_select"):
-            return [item["name"] for item in prop["multi_select"]]
-        return []
-    
-    def _extract_number(self, prop) -> Optional[int]:
-        """Extract number property value"""
-        if prop and prop.get("number") is not None:
-            return int(prop["number"])
-        return None
-    
     def _is_do_now(self, classification: NoteClassification) -> bool:
-        """Determine if note is DO_NOW based on action and confidence"""
+        """Determine if note is DO_NOW based on action"""
         return (
             classification.action == ActionType.DO_NOW 
-            and classification.confidence_scores[0] >= self.config.do_now_threshold
         )
