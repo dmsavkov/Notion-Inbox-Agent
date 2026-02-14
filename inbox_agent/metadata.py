@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-import openai
 import json
 from inbox_agent.pydantic_models import (
     MetadataResult, NoteClassification, ProjectMetadata, 
@@ -21,12 +20,6 @@ class MetadataProcessor:
     ):
         self.notion_client = notion_client
         self.config = config or MetadataConfig()
-        
-        # Initialize OpenAI client for Gemini
-        self.client = openai.OpenAI(
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            api_key=settings.GOOGLE_API_KEY
-        )
     
     def process(self, note: str) -> MetadataResult:
         """
@@ -126,7 +119,8 @@ Return ONLY valid JSON:
 }}"""
 
         try:
-            response = self.client.chat.completions.create(
+            client = self.config.model.get_client()
+            response = client.chat.completions.create(
                 model=self.config.model.model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},

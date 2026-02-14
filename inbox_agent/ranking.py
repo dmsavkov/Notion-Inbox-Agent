@@ -1,11 +1,9 @@
 import logging
 import json
 from typing import Optional
-import openai
 from inbox_agent.pydantic_models import (
     RankingResult, BrainstormResult, RankingConfig, ProjectMetadata
 )
-from inbox_agent.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +12,6 @@ class RankingProcessor:
     
     def __init__(self, config: Optional[RankingConfig] = None):
         self.config = config or RankingConfig()
-        
-        # Initialize OpenAI client
-        self.client = openai.OpenAI(
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            api_key=settings.GOOGLE_API_KEY
-        )
     
     def process(
         self, 
@@ -72,7 +64,8 @@ Return ONLY valid JSON:
 }}"""
 
         try:
-            response = self.client.chat.completions.create(
+            client = self.config.executor_model.get_client()
+            response = client.chat.completions.create(
                 model=self.config.executor_model.model_name,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self.config.executor_model.temperature,
@@ -149,7 +142,8 @@ Return ONLY valid JSON:
 }}"""
 
         try:
-            response = self.client.chat.completions.create(
+            client = self.config.judge_model.get_client()
+            response = client.chat.completions.create(
                 model=self.config.judge_model.model_name,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self.config.judge_model.temperature,

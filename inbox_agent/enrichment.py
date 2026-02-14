@@ -1,8 +1,6 @@
 import logging
 from typing import Optional
-import openai
 from inbox_agent.pydantic_models import EnrichmentResult, EnrichmentConfig
-from inbox_agent.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +16,6 @@ class EnrichmentProcessor:
     
     def __init__(self, config: Optional[EnrichmentConfig] = None):
         self.config = config or EnrichmentConfig()
-        
-        self.client = openai.OpenAI(
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            api_key=settings.GOOGLE_API_KEY
-        )
     
     def process(self, note: str, impact_score: int) -> Optional[EnrichmentResult]:
         """
@@ -76,7 +69,8 @@ Return ONLY valid JSON:
 }}"""
 
         try:
-            response = self.client.chat.completions.create(
+            client = self.config.model.get_client()
+            response = client.chat.completions.create(
                 model=self.config.model.model_name,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self.config.model.temperature,
