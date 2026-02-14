@@ -1,9 +1,6 @@
 from pathlib import Path
 from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
-import logging
-
-from inbox_agent.pydantic_models import AppConfig
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -56,7 +53,5 @@ class Settings(BaseSettings):
     )
 
 settings = Settings()
-
-DEFAULT_APP_CONFIG = AppConfig()
 
 

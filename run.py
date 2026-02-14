@@ -5,12 +5,13 @@ import notion_client as notion_api
 from inbox_agent.pydantic_models import (
     NotionTask, AppConfig, ActionType, AIUseStatus
 )
-from inbox_agent.config import settings, DEFAULT_APP_CONFIG
+from inbox_agent.config import settings
 from inbox_agent.metadata import MetadataProcessor
 from inbox_agent.ranking import RankingProcessor
 from inbox_agent.enrichment import EnrichmentProcessor
 from inbox_agent.task import TaskManager
 from inbox_agent.utils import generate_default_title
+from inbox_agent.pydantic_models import DEFAULT_APP_CONFIG
 
 # Setup logging
 logging.basicConfig(

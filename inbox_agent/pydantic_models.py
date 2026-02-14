@@ -167,3 +167,5 @@ class NotionTask(BaseModel):
     confidence: Optional[float] = None  # Optional; empty by default
     original_note: str
     enrichment: Optional[str] = None
+    
+DEFAULT_APP_CONFIG = AppConfig()
