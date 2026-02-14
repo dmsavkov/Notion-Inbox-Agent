@@ -11,16 +11,6 @@ from inbox_agent.notion import get_all_pages, get_block_plain_text
 
 logger = logging.getLogger(__name__)
 
-def get_projects_information(notion_client, data_source_id):
-    projects_pages = get_all_pages(notion_client, data_source_id)
-    print("Pages received. ")
-    
-    all_titles = [
-        get_block_plain_text(p) for p in projects_pages
-    ]
-    
-    return json.dumps(all_titles)
-
 class MetadataProcessor:
     """Handles project classification and metadata fetching"""
     
@@ -51,7 +41,7 @@ class MetadataProcessor:
         logger.info("Starting metadata processing for note")
         logger.debug(f"Note: {note[:100]}...")
         
-        projects_info = get_projects_information(self.notion_client, settings)
+        projects_info = self._get_projects_information()
         
         # Step 1: Classify note
         classification = self._classify_note(note, projects_info)
@@ -71,6 +61,28 @@ class MetadataProcessor:
             project_metadata=project_metadata,
             is_do_now=is_do_now
         )
+    
+    def _get_projects_information(self) -> str:
+        """
+        Query Notion Projects database and return all project titles as JSON.
+        
+        Returns:
+            JSON string of project titles
+        """
+        try:
+            projects_pages = get_all_pages(self.notion_client, settings.NOTION_DATA_SOURCE_ID)
+            logger.debug(f"Retrieved {len(projects_pages)} project pages from Notion")
+            
+            all_titles = [
+                get_block_plain_text(p) for p in projects_pages
+            ]
+            
+            logger.debug(f"Extracted {len(all_titles)} project titles")
+            return json.dumps(all_titles)
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch projects information: {e}", exc_info=True)
+            raise
     
     def _classify_note(self, note: str, projects_info: str) -> NoteClassification:
         """Classify note using LLM - determines top N projects and action property"""
@@ -218,5 +230,3 @@ Return ONLY valid JSON:
             classification.action == ActionType.DO_NOW 
             and classification.confidence_scores[0] >= self.config.do_now_threshold
         )
-
-# ...existing code...
