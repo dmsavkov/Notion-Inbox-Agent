@@ -73,6 +73,9 @@ class TaskManager:
             },
             "Impact": {
                 "number": task.impact
+            },
+            "Confidence": {
+                "number": task.confidence
             }
         }
         
@@ -83,7 +86,7 @@ class TaskManager:
             for project_name in task.projects:
                 try:
                     results = self.notion_client.databases.query(
-                        database_id=settings.PROJECTS_DATABASE_ID,
+                        database_id=settings.NOTION_DATA_SOURCE_ID,
                         filter={
                             "property": "Name",
                             "title": {"equals": project_name}
@@ -121,9 +124,8 @@ class TaskManager:
             blocks.extend(enrichment_blocks)
         
         # Metadata callout
-        metadata_text = f"""**Action**: {task.action.value}
-**Confidence**: {task.confidence:.2f}
-**Reasoning**: {task.reasoning}"""
+        metadata_text = f"""
+**Confidence**: {task.confidence:.2f}"""
         
         blocks.append({
             "object": "block",

@@ -149,7 +149,10 @@ Clarifying the problem, planning when building projects: should you spend time h
 Maybe, the right way is executing, "just doing it"?
 """
     config = DEFAULT_APP_CONFIG.model_copy()
+    config.metadata.model.model_name = 'gemma-3-12b-it'
+    config.ranking.executor_model.model_name = 'gemma-3-12b-it'
     config.enrichment.model.model_name = 'gemma-3-27b-it'
+    config.ranking.judge_model.model_name = 'gemma-3-27b-it'
     
     try:
         task = process_note(note, config=config)
