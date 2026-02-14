@@ -144,6 +144,7 @@ class BrainstormResult(BaseModel):
 # PUT NUMBERS INTO FIELDS
 class RankingResult(BaseModel):
     """Judge model ranking output"""
+    title: str       # Task title (concise, representative)
     importance: int  # 1-4
     urgency: int     # 1-4
     impact: int      # 0-100

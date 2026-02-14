@@ -10,6 +10,7 @@ from inbox_agent.metadata import MetadataProcessor
 from inbox_agent.ranking import RankingProcessor
 from inbox_agent.enrichment import EnrichmentProcessor
 from inbox_agent.task import TaskManager
+from inbox_agent.utils import generate_default_title
 
 # Setup logging
 logging.basicConfig(
@@ -95,7 +96,7 @@ def process_note(note: str, config: Optional[AppConfig] = None) -> NotionTask:
     logger.info(f"✓ AI Use Status: {ai_use_status}")
     
     task = NotionTask(
-        title=_generate_title(note),
+        title=ranking_result.title,
         projects=metadata_result.classification.projects,
         ai_use_status=ai_use_status,
         importance=ranking_result.importance,
@@ -125,7 +126,7 @@ def _create_do_now_task(note: str, metadata_result, notion_client, config: AppCo
     
     # TODO: max is hardcoded. Ok for now. 
     task = NotionTask(
-        title=_generate_title(note),
+        title=generate_default_title(note),
         projects=metadata_result.classification.projects,
         ai_use_status=AIUseStatus.PROCESSED,  # DO_NOW always marked as processed
         importance=4,  # Max
@@ -141,18 +142,6 @@ def _create_do_now_task(note: str, metadata_result, notion_client, config: AppCo
     logger.info(f"✓ DO_NOW task created: {page['url']}")
     
     return task
-
-def _generate_title(note: str, max_length: int = 80) -> str:
-    """Generate task title from note (first line or truncated)"""
-    first_line = note.split('\n')[0].strip()
-    
-    # Remove markdown markers
-    title = first_line.replace('**', '').replace('*', '').replace('[', '').replace(']', '')
-    
-    if len(title) > max_length:
-        title = title[:max_length-3] + "..."
-    
-    return title or "Untitled Task"
 
 if __name__ == "__main__":
     note = """

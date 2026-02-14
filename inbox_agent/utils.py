@@ -154,5 +154,15 @@ def call_llm_with_json_response(
         logger.error(f"LLM call failed: {e}", exc_info=True)
         raise
 
-
+def generate_default_title(note: str, max_length: int = 80) -> str:
+    """Generate task title from note (first line or truncated)"""
+    first_line = note.split('\n')[0].strip()
+    
+    # Remove markdown markers
+    title = first_line.replace('**', '').replace('*', '').replace('[', '').replace(']', '')
+    
+    if len(title) > max_length:
+        title = title[:max_length-3] + "..."
+    
+    return title or "Untitled Task"
 

@@ -4,7 +4,7 @@ from typing import Optional
 from inbox_agent.pydantic_models import (
     RankingResult, BrainstormResult, RankingConfig, ProjectMetadata
 )
-from inbox_agent.utils import call_llm_with_json_response
+from inbox_agent.utils import call_llm_with_json_response, generate_default_title
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,8 @@ Brainstorm Analysis:
 Project Context:
 {meta_context}
 
-Evaluate on scales:
+Generate a concise title and evaluate on these scales:
+- title: Short, representative task title (max 80 chars)
 - importance (1-4): How critical is this to user's goals?
   1=trivial, 2=moderate, 3=important, 4=critical
 - urgency (1-4): How time-sensitive is this?
@@ -131,6 +132,7 @@ Rules:
 
 Return ONLY valid JSON:
 {{
+    "title": "Review project planning approach",
     "importance": 2,
     "urgency": 2,
     "impact": 15,
@@ -154,6 +156,7 @@ Return ONLY valid JSON:
             logger.error(f"Ranking failed: {e}", exc_info=True)
             # Return conservative defaults
             return RankingResult(
+                title=generate_default_title(note),
                 importance=2,
                 urgency=1,
                 impact=20,
