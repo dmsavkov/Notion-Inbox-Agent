@@ -25,6 +25,7 @@ logging.basicConfig(
 logging.getLogger("notion_client").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 def process_note(note: str, config: Optional[AppConfig] = None) -> NotionTask:
