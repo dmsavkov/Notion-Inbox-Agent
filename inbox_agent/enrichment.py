@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 from inbox_agent.pydantic_models import EnrichmentResult, EnrichmentConfig
+from inbox_agent.utils import call_llm_with_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -70,19 +71,14 @@ Return ONLY valid JSON:
 
         try:
             client = self.config.model.get_client()
-            response = client.chat.completions.create(
-                model=self.config.model.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=self.config.model.temperature,
-                top_p=self.config.model.top_p,
-                response_format={"type": "json_object"}
+            
+            data = call_llm_with_json_response(
+                client=client,
+                model_config=self.config.model,
+                messages=[{"role": "user", "content": prompt}]
             )
             
-            result = response.choices[0].message.content
-            logger.debug(f"Enrichment response: {result[:200]}...")
-            
-            import json
-            data = json.loads(result)
+            logger.debug(f"Enrichment response: {str(data)[:200]}...")
             
             return EnrichmentResult(
                 lenses_used=data["lenses_used"],

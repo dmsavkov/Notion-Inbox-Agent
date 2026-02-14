@@ -4,6 +4,7 @@ from typing import Optional
 from inbox_agent.pydantic_models import (
     RankingResult, BrainstormResult, RankingConfig, ProjectMetadata
 )
+from inbox_agent.utils import call_llm_with_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -65,18 +66,14 @@ Return ONLY valid JSON:
 
         try:
             client = self.config.executor_model.get_client()
-            response = client.chat.completions.create(
-                model=self.config.executor_model.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=self.config.executor_model.temperature,
-                top_p=self.config.executor_model.top_p,
-                response_format={"type": "json_object"}
+            
+            data = call_llm_with_json_response(
+                client=client,
+                model_config=self.config.executor_model,
+                messages=[{"role": "user", "content": prompt}]
             )
             
-            result = response.choices[0].message.content
-            logger.debug(f"Executor response: {result[:200]}...")
-            
-            data = json.loads(result)
+            logger.debug(f"Executor response: {str(data)[:200]}...")
             return BrainstormResult(**data)
             
         except Exception as e:
@@ -143,18 +140,14 @@ Return ONLY valid JSON:
 
         try:
             client = self.config.judge_model.get_client()
-            response = client.chat.completions.create(
-                model=self.config.judge_model.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=self.config.judge_model.temperature,
-                top_p=self.config.judge_model.top_p,
-                response_format={"type": "json_object"}
+            
+            data = call_llm_with_json_response(
+                client=client,
+                model_config=self.config.judge_model,
+                messages=[{"role": "user", "content": prompt}]
             )
             
-            result = response.choices[0].message.content
-            logger.debug(f"Judge response: {result}")
-            
-            data = json.loads(result)
+            logger.debug(f"Judge response: {data}")
             return RankingResult(**data)
             
         except Exception as e:

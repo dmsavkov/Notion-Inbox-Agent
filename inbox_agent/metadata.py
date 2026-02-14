@@ -1,12 +1,13 @@
 import logging
 from typing import Optional
-import json
 from inbox_agent.pydantic_models import (
     MetadataResult, NoteClassification, ProjectMetadata, 
     MetadataConfig, ModelConfig, ActionType
 )
 from inbox_agent.config import settings
 from inbox_agent.notion import get_all_pages, get_block_plain_text
+from inbox_agent.utils import call_llm_with_json_response
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -120,21 +121,17 @@ Return ONLY valid JSON:
 
         try:
             client = self.config.model.get_client()
-            response = client.chat.completions.create(
-                model=self.config.model.model_name,
+            
+            data = call_llm_with_json_response(
+                client=client,
+                model_config=self.config.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
-                ],
-                temperature=self.config.model.temperature,
-                top_p=self.config.model.top_p,
-                response_format={"type": "json_object"}
+                ]
             )
             
-            result = response.choices[0].message.content
-            logger.debug(f"LLM classification response: {result}")
-            
-            data = json.loads(result)
+            logger.debug(f"LLM classification response: {data}")
             
             return NoteClassification(
                 note_id=data.get("note_id", 0),
