@@ -163,8 +163,6 @@ class NotionTask(BaseModel):
     importance: int
     urgency: int
     impact: int
-    confidence: float
+    confidence: Optional[float] = None  # Optional; empty by default
     original_note: str
     enrichment: Optional[str] = None
-    reasoning: str
-    action: ActionType

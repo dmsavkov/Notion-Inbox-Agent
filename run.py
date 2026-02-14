@@ -1,8 +1,9 @@
 import logging
 from pathlib import Path
+from typing import Optional
 import notion_client as notion_api
 from inbox_agent.pydantic_models import (
-    NotionTask, AppConfig, ActionType
+    NotionTask, AppConfig, ActionType, AIUseStatus
 )
 from inbox_agent.config import settings, DEFAULT_APP_CONFIG
 from inbox_agent.metadata import MetadataProcessor
@@ -19,10 +20,10 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-logging.getLogger("notion_client").setLevel(logging.WARNING) 
+logging.getLogger("notion_client").setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
-def process_note(note: str, config: AppConfig = None) -> NotionTask:
+def process_note(note: str, config: Optional[AppConfig] = None) -> NotionTask:
     """
     Main workflow: orchestrates all modules to process a note.
     
@@ -33,7 +34,7 @@ def process_note(note: str, config: AppConfig = None) -> NotionTask:
     Returns:
         NotionTask ready for Notion
     """
-    config = config or DEFAULT_APP_CONFIG
+    config = config or DEFAULT_APP_CONFIG # Note: avoids early binding
     logger.info("="*80)
     logger.info("Starting note processing workflow")
     logger.info(f"Note: {note[:100]}...")
@@ -57,7 +58,7 @@ def process_note(note: str, config: AppConfig = None) -> NotionTask:
     # Check DO_NOW bypass
     if metadata_result.is_do_now:
         logger.info("\n🚀 DO_NOW detected - bypassing ranking and enrichment")
-        return _create_do_now_task(note, metadata_result, config)
+        return _create_do_now_task(note, metadata_result, notion_client, config)
     
     # Step 2: Ranking
     logger.info("\n[Step 2/5] Ranking")
@@ -89,6 +90,7 @@ def process_note(note: str, config: AppConfig = None) -> NotionTask:
     logger.info("-"*80)
     task_manager = TaskManager(notion_client, config=config.task)
     
+    # ai_use_status determined from ranking confidence
     ai_use_status = task_manager.determine_ai_use_status(ranking_result.confidence)
     logger.info(f"✓ AI Use Status: {ai_use_status}")
     
@@ -101,9 +103,7 @@ def process_note(note: str, config: AppConfig = None) -> NotionTask:
         impact=ranking_result.impact,
         confidence=ranking_result.confidence,
         original_note=note,
-        enrichment=enrichment_result.enriched_text if enrichment_result else None,
-        reasoning=ranking_result.reasoning,
-        action=metadata_result.classification.action
+        enrichment=enrichment_result.enriched_text if enrichment_result else None
     )
     
     logger.info(f"✓ Task assembled: {task.title}")
@@ -118,29 +118,25 @@ def process_note(note: str, config: AppConfig = None) -> NotionTask:
     logger.info("Processing complete!")
     
     return task
-def _create_do_now_task(note: str, metadata_result, config: AppConfig) -> NotionTask:
+
+def _create_do_now_task(note: str, metadata_result, notion_client, config: AppConfig) -> NotionTask:
     """Create task for DO_NOW notes (bypass ranking/enrichment)"""
     logger.info("Creating DO_NOW task with max urgency/impact")
     
-    notion_client = notion_api.Client(auth=settings.NOTION_TOKEN)
-    task_manager = TaskManager(notion_client, config=config.task)
-    
+    # TODO: max is hardcoded. Ok for now. 
     task = NotionTask(
         title=_generate_title(note),
         projects=metadata_result.classification.projects,
-        ai_use_status=task_manager.determine_ai_use_status(
-            metadata_result.classification.confidence_scores[0]
-        ),
+        ai_use_status=AIUseStatus.PROCESSED,  # DO_NOW always marked as processed
         importance=4,  # Max
         urgency=4,     # Max
         impact=100,    # Max
         confidence=metadata_result.classification.confidence_scores[0],
         original_note=note,
-        enrichment=None,
-        reasoning=metadata_result.classification.reasoning,
-        action=ActionType.DO_NOW
+        enrichment=None
     )
     
+    task_manager = TaskManager(notion_client, config=config.task)
     page = task_manager.create_task(task)
     logger.info(f"✓ DO_NOW task created: {page['url']}")
     
@@ -164,7 +160,7 @@ Clarifying the problem, planning when building projects: should you spend time h
 Maybe, the right way is executing, "just doing it"?
 """
     config = DEFAULT_APP_CONFIG.model_copy()
-    config.ranking.judge_model.model_name = 'gemma-3-27b-it'
+    config.enrichment.model.model_name = 'gemma-3-27b-it'
     
     try:
         task = process_note(note, config=config)
