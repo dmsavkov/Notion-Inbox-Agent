@@ -42,6 +42,8 @@ class OpenAIClientConfig(BaseModel):
     """OpenAI client connection configuration"""
     base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     api_key: str = settings.GOOGLE_API_KEY
+    max_retries: int = 1
+    timeout: float = 60.0
 
 class ModelConfig(BaseModel):
     """LLM model configuration"""
@@ -55,7 +57,9 @@ class ModelConfig(BaseModel):
         """Instantiate OpenAI client based on configuration"""
         return openai.OpenAI(
             base_url=self.client_config.base_url,
-            api_key=self.client_config.api_key
+            api_key=self.client_config.api_key,
+            max_retries=self.client_config.max_retries,
+            timeout=self.client_config.timeout
         )
 
 class MetadataConfig(BaseModel):
