@@ -31,6 +31,55 @@ def supports_response_format(model_name: str) -> bool:
     return True
 
 
+def is_gemma_model(model_name: str) -> bool:
+    """Check if model is a Gemma variant (doesn't support system role)"""
+    return "gemma" in model_name.lower() and "flash" not in model_name.lower()
+
+
+def transform_messages_for_gemma(messages: list) -> list:
+    """
+    Transform messages for Gemma models, which don't support system role.
+    
+    Converts system role messages to user messages with "Instructions:" prefix.
+    
+    Args:
+        messages: List of message dictionaries with role and content
+        
+    Returns:
+        Transformed messages list compatible with Gemma
+    """
+    if not messages:
+        return messages
+    
+    transformed = []
+    system_instructions = []
+    
+    # Collect system messages
+    for msg in messages:
+        if msg.get("role") == "system":
+            system_instructions.append(msg.get("content", ""))
+        else:
+            transformed.append(msg)
+    
+    # If we have system instructions, prepend them to the first user message
+    if system_instructions:
+        instructions_text = "\n".join(system_instructions)
+        
+        # Find first user message and prepend instructions
+        for i, msg in enumerate(transformed):
+            if msg.get("role") == "user":
+                msg["content"] = f"Instructions:\n{instructions_text}\n\n{msg['content']}"
+                break
+        else:
+            # No user message found, create one
+            transformed.insert(0, {
+                "role": "user",
+                "content": f"Instructions:\n{instructions_text}"
+            })
+    
+    return transformed
+
+
 def extract_json_from_response(response_content: Optional[str]) -> Dict[str, Any]:
     """
     Extract and parse JSON from LLM response content.
@@ -108,6 +157,9 @@ def call_llm_with_json_response(
     This function automatically determines whether to use response_format parameter
     based on the model type, and handles JSON extraction from the response.
     
+    For Gemma models (which don't support system role), system messages are
+    converted to user messages with an "Instructions:" prefix.
+    
     Args:
         client: OpenAI client instance
         model_config: ModelConfig object with model_name, temperature, top_p
@@ -123,10 +175,15 @@ def call_llm_with_json_response(
     # Determine if we should use response_format
     use_response_format = supports_response_format(model_config.model_name)
     
+    # Transform messages for Gemma models (no system role support)
+    processed_messages = messages
+    if is_gemma_model(model_config.model_name):
+        processed_messages = transform_messages_for_gemma(messages)
+    
     # Request params dict is more convenient to put in client chat later
     request_params = {
         "model": model_config.model_name,
-        "messages": messages,
+        "messages": processed_messages,
         "temperature": model_config.temperature,
         "top_p": model_config.top_p
     }
@@ -137,7 +194,8 @@ def call_llm_with_json_response(
     
     logger.debug(
         f"Calling LLM: model={model_config.model_name}, "
-        f"response_format={'enabled' if use_response_format else 'disabled'}"
+        f"response_format={'enabled' if use_response_format else 'disabled'}, "
+        f"messages_transformed={is_gemma_model(model_config.model_name)}"
     )
     
     try:
