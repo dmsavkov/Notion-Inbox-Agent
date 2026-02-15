@@ -56,6 +56,7 @@ Note → MetadataProcessor → RankingProcessor → EnrichmentProcessor → Task
 
 ```bash
 pytest                  # All tests
+pytest -m integration   # Slow integration tests (requires API keys)
 ```
 
 ## Current Focus
