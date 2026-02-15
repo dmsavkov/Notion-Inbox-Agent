@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     NOTION_TOKEN: str
     NOTION_PROJECTS_DATABASE_ID: str
     NOTION_PROJECTS_DATA_SOURCE_ID: str
+    NOTION_TASKS_DATABASE_ID: str
     NOTION_TASKS_DATA_SOURCE_ID: str
     NOTION_INBOX_PAGE_ID: str
     
@@ -48,7 +49,7 @@ class Settings(BaseSettings):
     
     # Load .env file
     model_config = ConfigDict(
-        env_file=".env",
+        env_file=PROJ_ROOT / ".env",
         env_file_encoding='utf-8',
         extra='ignore'
     )
