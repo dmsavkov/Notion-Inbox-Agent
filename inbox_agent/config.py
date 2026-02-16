@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     
     # AI
     GOOGLE_API_KEY: str = Field(..., env="GOOGLE_API_KEY")
+    GEMINI_API_BASE_URL: str = Field(..., default_factory=lambda: "https://generativelanguage.googleapis.com/v1beta/openai/", env="GEMINI_API_BASE_URL")
     
     @property
     def DATA_DIR(self) -> Path:

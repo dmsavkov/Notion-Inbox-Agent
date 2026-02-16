@@ -40,7 +40,7 @@ class AIUseStatus(str, Enum):
 
 class OpenAIClientConfig(BaseModel):
     """OpenAI client connection configuration"""
-    base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    base_url: str = settings.GEMINI_API_BASE_URL
     api_key: str = settings.GOOGLE_API_KEY
     max_retries: int = 1
     timeout: float = 60.0
