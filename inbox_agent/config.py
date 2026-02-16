@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     NOTION_TASKS_DATABASE_ID: str
     NOTION_TASKS_DATA_SOURCE_ID: str
     NOTION_INBOX_PAGE_ID: str
+
+    # Runtime mode
+    RUNTIME_MODE: str = "PROD"
     
     # AI
     GOOGLE_API_KEY: str = Field(..., env="GOOGLE_API_KEY")
@@ -47,6 +50,14 @@ class Settings(BaseSettings):
     @property
     def RESULTS_DIR(self) -> Path:
         return self.PROJ_ROOT / "output" / "results"
+
+    @property
+    def DEBUG_TASKS_DIR(self) -> Path:
+        return self.LOGS_DIR / "debug_tasks"
+
+    @property
+    def IS_TEST_ENV(self) -> bool:
+        return self.RUNTIME_MODE.upper() == "TEST"
     
     # Load .env file
     model_config = ConfigDict(

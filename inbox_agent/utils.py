@@ -1,9 +1,11 @@
 import json
 import re
 import logging
+import time
 from typing import Any, Dict, Optional
 from openai import OpenAI
 
+from inbox_agent.config import settings
 from inbox_agent.pydantic_models import ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -175,6 +177,14 @@ def call_llm_with_json_response(
         ValueError: If JSON cannot be extracted
         Exception: Re-raises any API errors
     """
+    if settings.IS_TEST_ENV:
+        logger.info(
+            "TEST mode active: skipping real LLM API call for model=%s",
+            model_config.model_name
+        )
+        time.sleep(0.5)
+        return _build_dummy_llm_response(messages)
+
     # Determine if we should use response_format
     use_response_format = supports_response_format(model_config.model_name)
     
@@ -214,6 +224,55 @@ def call_llm_with_json_response(
     except Exception as e:
         logger.error(f"LLM call failed: {e}", exc_info=True)
         raise
+
+
+def _build_dummy_llm_response(messages: list[dict[str, str]]) -> Dict[str, Any]:
+    """Build deterministic dummy JSON response for TEST mode."""
+    combined_text = "\n".join(msg.get("content", "") for msg in messages if isinstance(msg, dict))
+    combined_text_lower = combined_text.lower()
+
+    if all(key in combined_text_lower for key in ["projects", "action", "confidence_scores"]):
+        return {
+            "note_id": 1,
+            "projects": ["Test Project"],
+            "action": "REFINE",
+            "reasoning": "Dummy metadata classification in TEST mode.",
+            "confidence_scores": [0.82, 0.71, 0.64]
+        }
+
+    elif all(key in combined_text_lower for key in ["assumptions", "potential_impact", "related_topics", "judgement"]):
+        return {
+            "assumptions": ["This is a TEST mode run."],
+            "potential_impact": "Medium impact.",
+            "related_topics": ["Testing", "Debugging"],
+            "judgement": "Proceed with lightweight analysis."
+        }
+
+    elif all(key in combined_text_lower for key in ["importance", "urgency", "impact", "confidence"]):
+        return {
+            "title": "Debug Task - TEST Mode",
+            "importance": 2,
+            "urgency": 2,
+            "impact": 35,
+            "confidence": 0.8,
+            "reasoning": "Deterministic dummy ranking for TEST mode."
+        }
+
+    elif all(key in combined_text_lower for key in ["lenses_used", "enriched_text"]):
+        return {
+            "lenses_used": ["A", "B"],
+            "enriched_text": "Dummy enrichment content generated in TEST mode."
+        }
+        
+    else:
+        message = "Unable to determine response type for dummy LLM response. Check the input messages."
+        logger.critical(message)
+        raise ValueError(message)
+
+    return {
+        "status": "ok",
+        "message": "Dummy response generated in TEST mode."
+    }
 
 def generate_default_title(note: str, max_length: int = 80) -> str:
     """Generate task title from note (first line or truncated)"""

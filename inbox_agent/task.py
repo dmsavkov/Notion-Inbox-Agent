@@ -1,4 +1,8 @@
 import logging
+import json
+import re
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from inbox_agent.pydantic_models import NotionTask, AIUseStatus, TaskConfig
 from inbox_agent.notion import create_toggle_blocks
@@ -27,10 +31,22 @@ class TaskManager:
         logger.debug(f"Task data: {task.dict()}")
         
         # Build properties
-        properties = self._build_properties(task)
+        properties = self._build_properties(task, include_relations=not settings.IS_TEST_ENV)
         
         # Build content blocks
         children = self._build_content_blocks(task)
+
+        if settings.IS_TEST_ENV:
+            self._validate_task_payload(properties, children)
+            debug_file = self._write_debug_task_markdown(task, properties, children)
+            logger.info(f"TEST mode: task inspected and written to {debug_file}")
+            return {
+                "id": f"debug-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                "url": str(debug_file),
+                "properties": properties,
+                "children": children,
+                "object": "debug_task"
+            }
         
         # Create page
         try:
@@ -48,7 +64,7 @@ class TaskManager:
             logger.error(f"Failed to create task: {e}", exc_info=True)
             raise
     
-    def _build_properties(self, task: NotionTask) -> dict:
+    def _build_properties(self, task: NotionTask, include_relations: bool = True) -> dict:
         """Build Notion properties dict matching the actual Notion database schema"""
         properties = {
             "Name": {
@@ -86,7 +102,7 @@ class TaskManager:
         }
         
         # Add project relation (singular, use first project if available)
-        if task.projects:
+        if include_relations and task.projects:
             # Query project ID for the first project
             project_name = task.projects[0]
             try:
@@ -106,6 +122,57 @@ class TaskManager:
                 logger.warning(f"Could not find project {project_name}: {e}")
         
         return properties
+
+    def _validate_task_payload(self, properties: dict, children: list[dict]) -> None:
+        """Basic payload validation for TEST mode inspection."""
+        required_properties = ["Name", "Importance", "Urgency", "Impact Score", "UseAIStatus", "Status"]
+        missing = [prop for prop in required_properties if prop not in properties]
+        if missing:
+            raise ValueError(f"Missing required properties: {missing}")
+
+        if not children:
+            raise ValueError("Task content blocks are empty")
+
+        if properties["Name"].get("title") is None:
+            raise ValueError("Name.title is missing")
+
+    def _write_debug_task_markdown(self, task: NotionTask, properties: dict, children: list[dict]) -> Path:
+        """Write TEST-mode task payload to logs/debug_tasks/<title>.md."""
+        settings.DEBUG_TASKS_DIR.mkdir(parents=True, exist_ok=True)
+
+        safe_title = re.sub(r"[^a-zA-Z0-9 _-]", "", task.title).strip().replace(" ", "_")
+        if not safe_title:
+            safe_title = "untitled_task"
+
+        file_path = settings.DEBUG_TASKS_DIR / f"{safe_title}.md"
+        if file_path.exists():
+            suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_path = settings.DEBUG_TASKS_DIR / f"{safe_title}_{suffix}.md"
+
+        content = [
+            f"# {task.title}",
+            "",
+            f"- Created (debug): {datetime.now().isoformat()}",
+            f"- Environment: {settings.RUNTIME_MODE}",
+            "",
+            "## Task Model",
+            "```json",
+            json.dumps(task.model_dump(), indent=2, ensure_ascii=False),
+            "```",
+            "",
+            "## Notion Properties Payload",
+            "```json",
+            json.dumps(properties, indent=2, ensure_ascii=False),
+            "```",
+            "",
+            "## Notion Children Payload",
+            "```json",
+            json.dumps(children, indent=2, ensure_ascii=False),
+            "```",
+        ]
+
+        file_path.write_text("\n".join(content), encoding="utf-8")
+        return file_path
     
     def _build_content_blocks(self, task: NotionTask) -> list[dict]:
         """Build page content blocks"""

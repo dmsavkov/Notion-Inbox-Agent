@@ -118,7 +118,10 @@ def process_note(note: str, config: Optional[AppConfig] = None) -> NotionTask:
     logger.info("\n[Step 5/5] Adding to Notion")
     logger.info("-"*80)
     page = task_manager.create_task(task)
-    logger.info(f"✓ Task created in Notion: {page['url']}")
+    if settings.IS_TEST_ENV:
+        logger.info(f"✓ TEST mode: task payload logged to {page['url']}")
+    else:
+        logger.info(f"✓ Task created in Notion: {page['url']}")
     
     logger.info("\n" + "="*80)
     logger.info("Processing complete!")
