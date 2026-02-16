@@ -258,10 +258,7 @@ $RECYCLE.BIN/
 # Project
 reports/
 mlflow/
-notebooks/agent-learning.ipynb
-notebooks/notion.ipynb
-
-# Other
+logs/
 instructions/
 notebooks/
 output/results/
