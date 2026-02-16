@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import sys
 from typing import Optional
 import notion_client as notion_api
 from inbox_agent.pydantic_models import (
@@ -18,8 +19,8 @@ logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('logs/inbox_agent.log'),
-        logging.StreamHandler()
+        logging.FileHandler('logs/inbox_agent.log', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
     ]
 )
 logging.getLogger("notion_client").setLevel(logging.WARNING)
@@ -148,10 +149,14 @@ def _create_do_now_task(note: str, metadata_result, notion_client, config: AppCo
     return task
 
 if __name__ == "__main__":
-    note = """
+    '''note = """
 Clarifying the problem, planning when building projects: should you spend time here? How much? 
 Maybe, the right way is executing, "just doing it"?
-"""
+"""'''
+    note = """
+Drawing is the way to input mre details and more relevant into your explanation. Words are limited to one
+    """
+    
     config = DEFAULT_APP_CONFIG.model_copy()
     config.metadata.model.model_name = 'gemma-3-27b-it'
     config.ranking.executor_model.model_name = 'gemma-3-27b-it'
