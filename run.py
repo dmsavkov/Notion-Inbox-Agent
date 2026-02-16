@@ -153,14 +153,40 @@ def _create_do_now_task(note: str, metadata_result, notion_client, config: AppCo
     
     return task
 
-if __name__ == "__main__":
-    '''note = """
-Clarifying the problem, planning when building projects: should you spend time here? How much? 
-Maybe, the right way is executing, "just doing it"?
-"""'''
-    note = """
-Drawing is the way to input mre details and more relevant into your explanation. Words are limited to one
+def process_notes(notes: list[str], config: Optional[AppConfig] = None) -> list[tuple[str, Optional[NotionTask], Optional[Exception]]]:
     """
+    Process multiple notes and return results for each.
+    
+    Args:
+        notes: List of note texts to process
+        config: Application configuration (uses defaults if None)
+        
+    Returns:
+        List of tuples (note_text, task_or_none, exception_or_none) for each note
+    """
+    config = config or DEFAULT_APP_CONFIG
+    results = []
+    
+    for i, note in enumerate(notes, 1):
+        try:
+            logger.info(f"\n{'='*80}")
+            logger.info(f"[{i}/{len(notes)}] Processing note")
+            logger.info(f"{'='*80}")
+            task = process_note(note, config=config)
+            results.append((note, task, None))
+            logger.info(f"[{i}/{len(notes)}] Success: {task.title}")
+        except Exception as e:
+            logger.error(f"[{i}/{len(notes)}] Error: {e}", exc_info=True)
+            results.append((note, None, e))
+    
+    return results
+
+if __name__ == "__main__":
+    notes = [
+        "Review the latest AI research paper and summarize key findings",
+        "Drawing is the way to input more details and more relevant into your explanation. Words are limited to one dimension.",
+        "**[DO_NOW]** Fix critical bug in production database",
+    ]
     
     config = DEFAULT_APP_CONFIG.model_copy()
     config.metadata.model.model_name = 'gemma-3-27b-it'
@@ -168,8 +194,25 @@ Drawing is the way to input mre details and more relevant into your explanation.
     config.enrichment.model.model_name = 'gemma-3-27b-it'
     config.ranking.judge_model.model_name = 'gemini-2.5-flash'
     
-    try:
-        task = process_note(note, config=config)
-        print(f"\n✅ Success! Task created: {task.title}")
-    except Exception as e:
-        logger.error(f"❌ Failed to process note: {e}", exc_info=True)
+    results = process_notes(notes, config=config)
+    
+    # Summary report
+    successful = [r for r in results if r[1] is not None]
+    failed = [r for r in results if r[2] is not None]
+    
+    print(f"\n{'='*80}")
+    print(f"Processing Summary")
+    print(f"{'='*80}")
+    print(f"Total: {len(notes)} notes")
+    print(f"Successful: {len(successful)}")
+    print(f"Failed: {len(failed)}")
+    
+    if successful:
+        print(f"\nCreated tasks:")
+        for note, task, _ in successful:
+            print(f"  • {task.title}")
+    
+    if failed:
+        print(f"\nFailed notes:")
+        for note, _, error in failed:
+            print(f"  • {note[:50]}... - {str(error)[:50]}")

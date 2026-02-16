@@ -5,7 +5,7 @@ Uses mocked Notion API, real LLM calls (if API keys present).
 import pytest
 from unittest.mock import Mock, patch
 from inbox_agent.pydantic_models import NotionTask, AppConfig
-from run import process_note
+from run import process_note, process_notes
 
 
 SAMPLE_NOTES = {
@@ -87,6 +87,26 @@ class TestPipelineIntegration:
         assert isinstance(result, NotionTask)
         # DO_NOW should influence classification
         assert result.original_note == note
+    
+    @patch('run.notion_api.Client')
+    def test_process_multiple_notes(self, mock_client_class, mock_notion_client):
+        """Test processing multiple notes returns results for each"""
+        mock_client_class.return_value = mock_notion_client
+        
+        notes = [SAMPLE_NOTES["simple"], SAMPLE_NOTES["urgent"]]
+        results = process_notes(notes)
+        
+        # Verify structure
+        assert len(results) == 2
+        assert all(isinstance(r, tuple) and len(r) == 3 for r in results)
+        
+        # Verify each result tuple
+        for note_text, task, error in results:
+            assert note_text in notes
+            # Either task or error should be populated
+            assert (task is not None and error is None) or (task is None and error is not None)
+            if task:
+                assert isinstance(task, NotionTask)
     
     def test_task_assembly_all_fields(self):
         """Test NotionTask assembled with all fields correctly"""
