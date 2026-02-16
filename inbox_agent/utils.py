@@ -2,6 +2,9 @@ import json
 import re
 import logging
 from typing import Any, Dict, Optional
+from openai import OpenAI
+
+from inbox_agent.pydantic_models import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -147,9 +150,9 @@ def extract_json_from_response(response_content: Optional[str]) -> Dict[str, Any
 
 
 def call_llm_with_json_response(
-    client,
-    model_config,
-    messages: list
+    client: OpenAI,
+    model_config: ModelConfig,
+    messages: list[dict[str, str]]
 ) -> Dict[str, Any]:
     """
     Call LLM and extract JSON response with automatic handling of response_format.
