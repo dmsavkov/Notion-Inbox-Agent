@@ -48,6 +48,11 @@ class TestNotionAPI:
         )
         
         result = task_manager.create_task(task)
+        
+        # Skip actual Notion API calls if in DEBUG/TEST mode (which returns debug objects)
+        if result['object'] == 'debug_task':
+            pytest.skip("Test skipped: running in DEBUG/TEST mode (no real Notion API calls)")
+        
         cleanup_pages.append(result['id'])
         
         # Verify response structure

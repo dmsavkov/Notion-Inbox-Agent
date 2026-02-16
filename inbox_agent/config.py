@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     def IS_TEST_ENV(self) -> bool:
         return self.RUNTIME_MODE.upper() == "TEST"
     
+    @property
+    def IS_DEBUG_ENV(self) -> bool:
+        return self.RUNTIME_MODE.upper() == "DEBUG"
+    
     # Load .env file
     model_config = ConfigDict(
         env_file=PROJ_ROOT / ".env",

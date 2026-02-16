@@ -31,15 +31,17 @@ class TaskManager:
         logger.debug(f"Task data: {task.dict()}")
         
         # Build properties
-        properties = self._build_properties(task, include_relations=not settings.IS_TEST_ENV)
+        is_debug_or_test = settings.IS_TEST_ENV or settings.IS_DEBUG_ENV
+        properties = self._build_properties(task, include_relations=not is_debug_or_test)
         
         # Build content blocks
         children = self._build_content_blocks(task)
 
-        if settings.IS_TEST_ENV:
+        if is_debug_or_test:
             self._validate_task_payload(properties, children)
             debug_file = self._write_debug_task_markdown(task, properties, children)
-            logger.info(f"TEST mode: task inspected and written to {debug_file}")
+            mode = "TEST" if settings.IS_TEST_ENV else "DEBUG"
+            logger.info(f"{mode} mode: task inspected and written to {debug_file}")
             return {
                 "id": f"debug-{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 "url": str(debug_file),

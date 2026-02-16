@@ -119,7 +119,9 @@ def process_note(note: str, config: Optional[AppConfig] = None) -> NotionTask:
     logger.info("-"*80)
     page = task_manager.create_task(task)
     if settings.IS_TEST_ENV:
-        logger.info(f"✓ TEST mode: task payload logged to {page['url']}")
+        logger.info(f"✓ TEST mode (dummy LLM): task payload logged to {page['url']}")
+    elif settings.IS_DEBUG_ENV:
+        logger.info(f"✓ DEBUG mode (real LLM): task payload logged to {page['url']}")
     else:
         logger.info(f"✓ Task created in Notion: {page['url']}")
     
