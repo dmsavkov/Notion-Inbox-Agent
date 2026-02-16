@@ -232,13 +232,22 @@ def _build_dummy_llm_response(messages: list[dict[str, str]]) -> Dict[str, Any]:
     combined_text_lower = combined_text.lower()
 
     if all(key in combined_text_lower for key in ["projects", "action", "confidence_scores"]):
-        return {
-            "note_id": 1,
-            "projects": ["Test Project"],
-            "action": "REFINE",
-            "reasoning": "Dummy metadata classification in TEST mode.",
-            "confidence_scores": [0.82, 0.71, 0.64]
-        }
+        # Batch classification: count how many notes are in the prompt
+        import re
+        note_matches = re.findall(r'note \d+:', combined_text_lower)
+        note_count = max(len(note_matches), 1)
+        
+        classifications = []
+        for i in range(note_count):
+            classifications.append({
+                "note_id": i,
+                "projects": ["Test Project"],
+                "action": "REFINE",
+                "reasoning": f"Dummy metadata classification in TEST mode (note {i}).",
+                "confidence_scores": [0.82, 0.71, 0.64]
+            })
+        
+        return {"classifications": classifications}
 
     elif all(key in combined_text_lower for key in ["assumptions", "potential_impact", "related_topics", "judgement"]):
         return {

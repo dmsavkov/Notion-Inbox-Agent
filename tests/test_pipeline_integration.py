@@ -4,7 +4,9 @@ Uses mocked Notion API, real LLM calls (if API keys present).
 """
 import pytest
 from unittest.mock import Mock, patch
-from inbox_agent.pydantic_models import NotionTask, AppConfig
+from inbox_agent.pydantic_models import (
+    NotionTask, AppConfig, MetadataResult, NoteClassification, ActionType
+)
 from run import process_note, process_notes
 
 
@@ -12,6 +14,21 @@ SAMPLE_NOTES = {
     "simple": "Review the latest AI research paper",
     "urgent": "**[DO_NOW]** Fix critical bug in production",
 }
+
+
+def _make_metadata_result(action: str = "REFINE", is_do_now: bool = False) -> MetadataResult:
+    """Helper to build a MetadataResult for tests."""
+    return MetadataResult(
+        classification=NoteClassification(
+            note_id=0,
+            projects=["Test Project"],
+            action=ActionType(action),
+            reasoning="Test classification",
+            confidence_scores=[0.9, 0.8, 0.7]
+        ),
+        project_metadata={},
+        is_do_now=is_do_now
+    )
 
 
 @pytest.fixture
@@ -66,7 +83,8 @@ class TestPipelineIntegration:
         mock_client_class.return_value = mock_notion_client
         
         note = SAMPLE_NOTES["simple"]
-        result = process_note(note)
+        metadata = _make_metadata_result("REFINE")
+        result = process_note(note, metadata)
         
         # Verify result structure
         assert isinstance(result, NotionTask)
@@ -78,20 +96,31 @@ class TestPipelineIntegration:
     
     @patch('run.notion_api.Client')
     def test_do_now_marker_detected(self, mock_client_class, mock_notion_client):
-        """Test that DO_NOW marker is detected"""
+        """Test that DO_NOW metadata creates a DO_NOW task"""
         mock_client_class.return_value = mock_notion_client
         
         note = SAMPLE_NOTES["urgent"]
-        result = process_note(note)
+        metadata = _make_metadata_result("DO_NOW", is_do_now=True)
+        result = process_note(note, metadata)
         
         assert isinstance(result, NotionTask)
-        # DO_NOW should influence classification
         assert result.original_note == note
+        assert result.importance == 4  # DO_NOW gets max values
+        assert result.urgency == 4
     
     @patch('run.notion_api.Client')
-    def test_process_multiple_notes(self, mock_client_class, mock_notion_client):
-        """Test processing multiple notes returns results for each"""
+    @patch('run.MetadataProcessor')
+    def test_process_multiple_notes(self, mock_metadata_class, mock_client_class, mock_notion_client):
+        """Test processing multiple notes with batch metadata"""
         mock_client_class.return_value = mock_notion_client
+        
+        # Mock batch metadata processor
+        mock_processor = Mock()
+        mock_processor.process.return_value = [
+            _make_metadata_result("REFINE"),
+            _make_metadata_result("DO_NOW", is_do_now=True),
+        ]
+        mock_metadata_class.return_value = mock_processor
         
         notes = [SAMPLE_NOTES["simple"], SAMPLE_NOTES["urgent"]]
         results = process_notes(notes)
@@ -103,7 +132,6 @@ class TestPipelineIntegration:
         # Verify each result tuple
         for note_text, task, error in results:
             assert note_text in notes
-            # Either task or error should be populated
             assert (task is not None and error is None) or (task is None and error is not None)
             if task:
                 assert isinstance(task, NotionTask)

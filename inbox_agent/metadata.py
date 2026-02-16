@@ -12,7 +12,7 @@ import json
 logger = logging.getLogger(__name__)
 
 class MetadataProcessor:
-    """Handles project classification and metadata fetching"""
+    """Handles project classification and metadata fetching for batches of notes."""
     
     def __init__(
         self, 
@@ -22,39 +22,169 @@ class MetadataProcessor:
         self.notion_client = notion_client
         self.config = config or MetadataConfig()
     
-    def process(self, note: str) -> MetadataResult:
+    def process(self, notes: list[str]) -> list[MetadataResult]:
         """
-        Main function: receives note, outputs projects metadata + urgency classification.
+        Classify a list of notes in batches, fetch project metadata, return results.
         
         Args:
-            note: Raw note text
+            notes: List of raw note texts
             
         Returns:
-            MetadataResult with classification and project metadata
+            List of MetadataResult, one per note (same order as input)
         """
-        logger.info("Starting metadata processing for note")
-        logger.debug(f"Note: {note[:100]}...")
+        logger.info(f"Starting metadata processing for {len(notes)} notes")
         
+        # Fetch projects once for all batches
         projects_info = self._get_projects_information()
         
-        # Step 1: Classify note
-        classification = self._classify_note(note, projects_info)
-        logger.info(f"Classification: {classification.action}, Projects: {classification.projects}")
+        # Classify all notes in batches
+        all_classifications = self._classify_notes_batched(notes, projects_info)
         
-        # Step 2: Fetch metadata for top N projects
-        project_metadata = self._fetch_project_metadata(classification.projects)
-        logger.debug(f"Fetched metadata for {len(project_metadata)} projects")
+        # Collect unique project names across all classifications
+        unique_projects = set()
+        for classification in all_classifications:
+            unique_projects.update(classification.projects)
         
-        # Step 3: Determine if DO_NOW
-        is_do_now = self._is_do_now(classification)
-        if is_do_now:
-            logger.info("Note classified as DO_NOW - will skip ranking/enrichment")
+        # Fetch metadata once for all referenced projects
+        project_metadata = self._fetch_project_metadata(list(unique_projects))
+        logger.debug(f"Fetched metadata for {len(project_metadata)} unique projects")
         
-        return MetadataResult(
-            classification=classification,
-            project_metadata=project_metadata,
-            is_do_now=is_do_now
-        )
+        # Build per-note MetadataResult
+        results = []
+        for classification in all_classifications:
+            # Filter project metadata to only this note's projects
+            note_metadata = {
+                name: project_metadata[name] 
+                for name in classification.projects 
+                if name in project_metadata
+            }
+            
+            is_do_now = self._is_do_now(classification)
+            if is_do_now:
+                logger.info(f"Note {classification.note_id} classified as DO_NOW")
+            
+            results.append(MetadataResult(
+                classification=classification,
+                project_metadata=note_metadata,
+                is_do_now=is_do_now
+            ))
+        
+        return results
+    
+    def _classify_notes_batched(self, notes: list[str], projects_info: str) -> list[NoteClassification]:
+        """Classify notes in batches of config.batch_size via single LLM calls."""
+        batch_size = self.config.batch_size
+        all_classifications = []
+        
+        for batch_start in range(0, len(notes), batch_size):
+            batch = notes[batch_start:batch_start + batch_size]
+            batch_indices = list(range(batch_start, batch_start + len(batch)))
+            
+            logger.info(f"Classifying batch of {len(batch)} notes (indices {batch_indices[0]}-{batch_indices[-1]})")
+            
+            classifications = self._classify_batch(batch, batch_indices, projects_info)
+            all_classifications.extend(classifications)
+        
+        return all_classifications
+    
+    def _classify_batch(self, batch: list[str], indices: list[int], projects_info: str) -> list[NoteClassification]:
+        """Classify a single batch of notes in one LLM call."""
+        
+        system_prompt = """You are an AI Classification Engine.
+        
+Task:
+1. Semantic analysis: Extract core topic, keywords, entities for EACH note
+2. Project mapping: Match each note to top-3 relevant project titles
+3. Action classification: Determine cognitive state (DO_NOW/REFINE/EXECUTE)
+4. Confidence scoring: Assign calibrated scores [0.0-1.0]
+
+You will classify multiple notes in a single request. Process each independently.
+Output strict JSON format."""
+
+        # Build notes section
+        notes_section = ""
+        for idx, note_text in zip(indices, batch):
+            notes_section += f"Note {idx}: {note_text}\n\n"
+
+        user_prompt = f"""<projects>
+{projects_info}
+</projects>
+
+<action_definitions>
+DO_NOW: Atomic execution tasks (2-10 min). Physical verbs, clear deliverable, binary completion.
+  Examples: "Create list", "Fix bug", "Update docs"
+
+REFINE: Semi-processed insights requiring synthesis. Lessons, principles, habits to internalize.
+  Examples: "Practice ego detachment", "Build habit of code review"
+
+EXECUTE: Fully processed reference material. Curated resources for later consumption.
+  Examples: "Article on microservices", "Video series on Kubernetes"
+</action_definitions>
+
+<notes_to_classify>
+{notes_section}</notes_to_classify>
+
+Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, one per note, in the same order.
+{{
+    "classifications": [
+        {{
+            "note_id": <index>,
+            "projects": ["project1", "project2", "project3"],
+            "action": "DO_NOW|REFINE|EXECUTE",
+            "reasoning": "brief explanation",
+            "confidence_scores": [0.95, 0.85, 0.70]
+        }}
+    ]
+}}"""
+
+        try:
+            client = self.config.model.get_client()
+            
+            data = call_llm_with_json_response(
+                client=client,
+                model_config=self.config.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            
+            logger.debug(f"LLM batch classification response: {data}")
+            
+            # Handle both formats: {"classifications": [...]} or direct list
+            raw_classifications = data.get("classifications", data) if isinstance(data, dict) else data
+            
+            results = []
+            for item in raw_classifications:
+                results.append(NoteClassification(
+                    note_id=item.get("note_id", 0),
+                    projects=item["projects"][:self.config.top_n_projects],
+                    action=ActionType(item["action"]),
+                    reasoning=item["reasoning"],
+                    confidence_scores=item["confidence_scores"][:self.config.top_n_projects]
+                ))
+            
+            # Ensure we got the right number of classifications
+            if len(results) != len(batch):
+                logger.warning(
+                    f"Expected {len(batch)} classifications, got {len(results)}. "
+                    f"Padding missing entries."
+                )
+                raise ValueError("LLM did not return expected number of classifications.")
+                while len(results) < len(batch):
+                    results.append(NoteClassification(
+                        note_id=indices[len(results)],
+                        projects=["Inbox"],
+                        action=ActionType.REFINE,
+                        reasoning="Fallback: LLM did not return classification for this note.",
+                        confidence_scores=[0.5]
+                    ))
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Batch classification failed: {e}", exc_info=True)
+            raise
     
     def _get_projects_information(self) -> str:
         """
@@ -76,73 +206,6 @@ class MetadataProcessor:
             
         except Exception as e:
             logger.error(f"Failed to fetch projects information: {e}", exc_info=True)
-            raise
-    
-    def _classify_note(self, note: str, projects_info: str) -> NoteClassification:
-        """Classify note using LLM - determines top N projects and action property"""
-        
-        system_prompt = """You are an AI Classification Engine.
-        
-Task:
-1. Semantic analysis: Extract core topic, keywords, entities
-2. Project mapping: Match to top-3 relevant project titles
-3. Action classification: Determine cognitive state (DO_NOW/REFINE/EXECUTE)
-4. Confidence scoring: Assign calibrated scores [0.0-1.0]
-
-Output strict JSON format."""
-
-        user_prompt = f"""<projects>
-{projects_info}
-</projects>
-
-<action_definitions>
-DO_NOW: Atomic execution tasks (2-10 min). Physical verbs, clear deliverable, binary completion.
-  Examples: "Create list", "Fix bug", "Update docs"
-
-REFINE: Semi-processed insights requiring synthesis. Lessons, principles, habits to internalize.
-  Examples: "Practice ego detachment", "Build habit of code review"
-
-EXECUTE: Fully processed reference material. Curated resources for later consumption.
-  Examples: "Article on microservices", "Video series on Kubernetes"
-</action_definitions>
-
-<note>
-{note}
-</note>
-
-Return ONLY valid JSON:
-{{
-    "note_id": 0,
-    "projects": ["project1", "project2", "project3"],
-    "action": "DO_NOW|REFINE|EXECUTE",
-    "reasoning": "brief explanation",
-    "confidence_scores": [0.95, 0.85, 0.70]
-}}"""
-
-        try:
-            client = self.config.model.get_client()
-            
-            data = call_llm_with_json_response(
-                client=client,
-                model_config=self.config.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ]
-            )
-            
-            logger.debug(f"LLM classification response: {data}")
-            
-            return NoteClassification(
-                note_id=data.get("note_id", 0),
-                projects=data["projects"][:self.config.top_n_projects],
-                action=ActionType(data["action"]),
-                reasoning=data["reasoning"],
-                confidence_scores=data["confidence_scores"][:self.config.top_n_projects]
-            )
-            
-        except Exception as e:
-            logger.error(f"Classification failed: {e}", exc_info=True)
             raise
     
     def _fetch_project_metadata(self, project_names: list[str]) -> dict[str, ProjectMetadata]:
@@ -174,8 +237,6 @@ Return ONLY valid JSON:
                 page = project_map[project_name]
                 props = page.get("properties", {})
                 
-                # Extract properties using unified function from notion.py
-                # extract_property_value handles all property type conversions
                 types_val = extract_property_value(props.get("Type"))
                 if not isinstance(types_val, list):
                     types_val = []
@@ -201,6 +262,4 @@ Return ONLY valid JSON:
     
     def _is_do_now(self, classification: NoteClassification) -> bool:
         """Determine if note is DO_NOW based on action"""
-        return (
-            classification.action == ActionType.DO_NOW 
-        )
+        return classification.action == ActionType.DO_NOW
