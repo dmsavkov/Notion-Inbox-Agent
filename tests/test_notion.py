@@ -4,8 +4,9 @@ These tests verify actual Notion API functionality.
 """
 import pytest
 from notion_client import Client
+from unittest.mock import Mock, patch
 from inbox_agent.config import settings
-from inbox_agent.notion import create_toggle_blocks, get_block_plain_text
+from inbox_agent.notion import create_toggle_blocks, get_block_plain_text, get_all_pages, get_inner_page_blocks, query_pages_filtered, _notion_cache
 from inbox_agent.task import TaskManager
 from inbox_agent.pydantic_models import NotionTask, AIUseStatus
 
@@ -107,3 +108,79 @@ class TestBlockTextExtraction:
     def test_extract_from_empty_block(self):
         assert get_block_plain_text(None) == ''
         assert get_block_plain_text({'type': 'divider'}) == ''
+
+
+@pytest.mark.unit
+class TestNotionCaching:
+    """Unit tests for Notion API caching"""
+    
+    def setup_method(self):
+        """Clear cache before each test"""
+        _notion_cache.clear()
+    
+    def test_get_all_pages_caches_results(self):
+        """Verify get_all_pages caches and reuses results"""
+        mock_client = Mock()
+        mock_client.data_sources.query.return_value = {
+            'results': [{'id': '1', 'name': 'page1'}],
+            'has_more': False
+        }
+        
+        # First call - API call
+        result1 = get_all_pages(mock_client, 'ds-123')
+        assert mock_client.data_sources.query.call_count == 1
+        
+        # Second call - should use cache, no new API call
+        result2 = get_all_pages(mock_client, 'ds-123')
+        assert mock_client.data_sources.query.call_count == 1  # Still 1, no new call
+        assert result1 == result2
+
+    def test_get_inner_page_blocks_caches_results(self):
+        """Verify get_inner_page_blocks caches and reuses results"""
+        mock_notion = Mock()
+        mock_notion.blocks.children.list.return_value = {
+            'results': [{'id': 'b1', 'type': 'paragraph'}],
+            'has_more': False
+        }
+        
+        # First call - API call
+        result1 = get_inner_page_blocks(mock_notion, 'page-456')
+        assert mock_notion.blocks.children.list.call_count == 1
+        
+        # Second call - should use cache
+        result2 = get_inner_page_blocks(mock_notion, 'page-456')
+        assert mock_notion.blocks.children.list.call_count == 1  # Still 1
+        assert result1 == result2
+    
+    def test_query_pages_filtered_caches_results(self):
+        """Verify query_pages_filtered caches filtered queries"""
+        mock_client = Mock()
+        mock_client.data_sources.query.return_value = {
+            'results': [{'id': 'p1', 'name': 'Project A'}],
+            'has_more': False
+        }
+        
+        filter_dict = {'property': 'Name', 'title': {'equals': 'Project A'}}
+        
+        # First call - API call
+        result1 = query_pages_filtered(mock_client, 'ds-789', filter_dict)
+        assert mock_client.data_sources.query.call_count == 1
+        
+        # Second call - should use cache
+        result2 = query_pages_filtered(mock_client, 'ds-789', filter_dict)
+        assert mock_client.data_sources.query.call_count == 1  # Still 1
+        assert result1 == result2
+    
+    def test_different_datasources_not_cached_together(self):
+        """Verify different data sources don't share cache"""
+        mock_client = Mock()
+        mock_client.data_sources.query.return_value = {
+            'results': [{'id': '1'}],
+            'has_more': False
+        }
+        
+        get_all_pages(mock_client, 'ds-111')
+        get_all_pages(mock_client, 'ds-222')
+        
+        # Two different data sources = two API calls
+        assert mock_client.data_sources.query.call_count == 2

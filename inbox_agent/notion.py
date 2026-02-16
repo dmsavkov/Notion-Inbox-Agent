@@ -2,7 +2,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Global cache for Notion API responses (expires when script stops)
+_notion_cache = {}
+
+def _get_cache_key(function_name: str, **kwargs) -> str:
+    """Generate a cache key from function name and parameters (excluding client)."""
+    sorted_params = sorted(
+        (k, str(v)) for k, v in kwargs.items() if k not in ('client', 'notion')
+    )
+    key = f"{function_name}:" + "|".join(f"{k}={v}" for k, v in sorted_params)
+    return key
+
 def get_all_pages(client, data_source_id):
+    """
+    Fetch all pages from a Notion data source with caching.
+    Results are cached globally and expire when the script stops.
+    """
+    cache_key = _get_cache_key("get_all_pages", data_source_id=data_source_id)
+    
+    # Check cache
+    if cache_key in _notion_cache:
+        logger.debug(f"Cache HIT: {cache_key}")
+        return _notion_cache[cache_key]
+    
+    logger.debug(f"Cache MISS: {cache_key} - fetching from Notion API")
     pages = []
     start_cursor = None
 
@@ -17,10 +40,26 @@ def get_all_pages(client, data_source_id):
             break
         start_cursor = response['next_cursor']
 
+    # Store in cache
+    _notion_cache[cache_key] = pages
+    logger.debug(f"Cached {len(pages)} pages for {cache_key}")
+    
     return pages
 
 
 def get_inner_page_blocks(notion, page_id):
+    """
+    Fetch all blocks (children) of a Notion page with caching.
+    Results are cached globally and expire when the script stops.
+    """
+    cache_key = _get_cache_key("get_inner_page_blocks", page_id=page_id)
+    
+    # Check cache
+    if cache_key in _notion_cache:
+        logger.debug(f"Cache HIT: {cache_key}")
+        return _notion_cache[cache_key]
+    
+    logger.debug(f"Cache MISS: {cache_key} - fetching from Notion API")
     blocks = []
     start_cursor = None
 
@@ -35,7 +74,53 @@ def get_inner_page_blocks(notion, page_id):
             break
         start_cursor = response['next_cursor']
 
+    # Store in cache
+    _notion_cache[cache_key] = blocks
+    logger.debug(f"Cached {len(blocks)} blocks for {cache_key}")
+    
     return blocks
+
+def query_pages_filtered(client, data_source_id, filter_dict=None):
+    """
+    Query pages from a data source with optional filter, with caching.
+    Useful for finding specific pages by property (e.g., project by name).
+    Results are cached globally and expire when the script stops.
+    
+    Args:
+        client: Notion client
+        data_source_id: Data source ID to query
+        filter_dict: Optional filter dict (e.g., {"property": "Name", "title": {"equals": "Project Name"}})
+    
+    Returns:
+        Query results dict with 'results' list
+    """
+    # Create cache key from data_source_id and filter
+    filter_key = str(filter_dict) if filter_dict else "no_filter"
+    cache_key = _get_cache_key("query_pages_filtered", data_source_id=data_source_id, filter=filter_key)
+    
+    # Check cache
+    if cache_key in _notion_cache:
+        logger.debug(f"Cache HIT: {cache_key}")
+        return _notion_cache[cache_key]
+    
+    logger.debug(f"Cache MISS: {cache_key} - fetching from Notion API")
+    
+    # Make query
+    if filter_dict:
+        results = client.data_sources.query(
+            data_source_id,
+            filter=filter_dict
+        )
+    else:
+        results = client.data_sources.query(
+            data_source_id
+        )
+    
+    # Store in cache
+    _notion_cache[cache_key] = results
+    logger.debug(f"Cached query result for {cache_key}: {len(results.get('results', []))} items")
+    
+    return results
 
 def get_block_plain_text(block):
     """Extract plain text from any Notion block, comment, page, icon, or cover."""

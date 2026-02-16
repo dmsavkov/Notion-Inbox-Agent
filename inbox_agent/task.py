@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from inbox_agent.pydantic_models import NotionTask, AIUseStatus, TaskConfig
-from inbox_agent.notion import create_toggle_blocks
+from inbox_agent.notion import create_toggle_blocks, query_pages_filtered
 from inbox_agent.config import settings
 
 logger = logging.getLogger(__name__)
@@ -105,12 +105,13 @@ class TaskManager:
         
         # Add project relation (singular, use first project if available)
         if include_relations and task.projects:
-            # Query project ID for the first project
+            # Query project ID for the first project (using cached query)
             project_name = task.projects[0]
             try:
-                results = self.notion_client.data_sources.query(
+                results = query_pages_filtered(
+                    self.notion_client,
                     settings.NOTION_PROJECTS_DATA_SOURCE_ID,
-                    filter={
+                    filter_dict={
                         "property": "Name",
                         "title": {"equals": project_name}
                     }
