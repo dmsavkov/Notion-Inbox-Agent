@@ -65,7 +65,7 @@ class ModelConfig(BaseModel):
 class MetadataConfig(BaseModel):
     """Configuration for metadata module"""
     top_n_projects: int = 3
-    min_confidence: float = 0.75
+    project_confidence_threshold: float = 0.85
     do_now_threshold: float = 0.9
     batch_size: int = 5
     model: ModelConfig = Field(default_factory=lambda: ModelConfig(

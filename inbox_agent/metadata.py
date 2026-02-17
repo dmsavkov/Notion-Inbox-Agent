@@ -162,12 +162,32 @@ Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, on
             
             results = []
             for item in raw_classifications:
+                # Filter projects by confidence threshold (instead of top N)
+                projects_list = item["projects"]
+                scores_list = item["confidence_scores"]
+                
+                # Keep projects with confidence > threshold
+                filtered = [
+                    (proj, score) for proj, score in zip(projects_list, scores_list)
+                    if score > self.config.project_confidence_threshold
+                ]
+                
+                if filtered:
+                    filtered_projects, filtered_scores = zip(*filtered)
+                    projects = list(filtered_projects)
+                    scores = list(filtered_scores)
+                else:
+                    # No projects above threshold
+                    projects = []
+                    scores = scores_list
+                    logger.warning(f"No projects above confidence threshold {self.config.project_confidence_threshold} for note {item.get('note_id', 0)}, using top 1")
+                
                 results.append(NoteClassification(
                     note_id=item.get("note_id", 0),
-                    projects=item["projects"][:self.config.top_n_projects],
+                    projects=projects,
                     action=ActionType(item["action"]),
                     reasoning=item["reasoning"],
-                    confidence_scores=item["confidence_scores"][:self.config.top_n_projects]
+                    confidence_scores=scores
                 ))
             
             # Ensure we got the right number of classifications

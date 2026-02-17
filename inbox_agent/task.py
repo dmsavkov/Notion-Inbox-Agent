@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from inbox_agent.pydantic_models import NotionTask, AIUseStatus, TaskConfig
-from inbox_agent.notion import create_toggle_blocks, query_pages_filtered
+from inbox_agent.notion import create_toggle_blocks, query_pages_filtered, get_block_plain_text
 from inbox_agent.config import settings
 
 logger = logging.getLogger(__name__)
@@ -103,26 +103,38 @@ class TaskManager:
             }
         }
         
-        # Add project relation (singular, use first project if available)
+        # Add project relations (all projects with high confidence)
         if include_relations and task.projects:
-            # Query project ID for the first project (using cached query)
-            project_name = task.projects[0]
+            # Query all projects in a single API call using OR filter
+            filter_dict = {
+                "or": [
+                    {"property": "Name", "title": {"equals": name}}
+                    for name in task.projects
+                ]
+            }
+            
             try:
                 results = query_pages_filtered(
                     self.notion_client,
                     settings.NOTION_PROJECTS_DATA_SOURCE_ID,
-                    filter_dict={
-                        "property": "Name",
-                        "title": {"equals": project_name}
-                    }
+                    filter_dict=filter_dict
                 )
-                if results["results"]:
+                
+                # Build mapping of project names to IDs
+                relation_ids = []
+                for project_page in results["results"]:
+                    # Get the project name from the page
+                    project_name = get_block_plain_text(project_page)
+                    if project_name:
+                        relation_ids.append({"id": project_page["id"]})
+            
+                if relation_ids:
                     properties["Project"] = {
-                        "relation": [{"id": results["results"][0]["id"]}]
+                        "relation": relation_ids
                     }
-                    logger.debug(f"Linked task to project: {project_name}")
+            
             except Exception as e:
-                logger.warning(f"Could not find project {project_name}: {e}")
+                logger.warning(f"Could not query projects: {e}")
         
         return properties
 
