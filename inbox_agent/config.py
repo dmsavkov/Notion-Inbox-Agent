@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     def IS_DEBUG_ENV(self) -> bool:
         return self.RUNTIME_MODE.upper() == "DEBUG"
     
+    @property
+    def IS_EVAL_ENV(self) -> bool:
+        return self.RUNTIME_MODE.upper() == "EVAL"
+    
     # Load .env file
     model_config = ConfigDict(
         env_file=PROJ_ROOT / ".env",

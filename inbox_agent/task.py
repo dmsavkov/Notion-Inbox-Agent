@@ -37,6 +37,7 @@ class TaskManager:
         # Build content blocks
         children = self._build_content_blocks(task)
 
+        # Handle TEST/DEBUG modes (no Notion creation)
         if is_debug_or_test:
             self._validate_task_payload(properties, children)
             debug_file = self._write_debug_task_markdown(task, properties, children)
@@ -49,6 +50,12 @@ class TaskManager:
                 "children": children,
                 "object": "debug_task"
             }
+        
+        # Handle EVAL mode (save to debug + create in Notion)
+        if settings.IS_EVAL_ENV:
+            self._validate_task_payload(properties, children)
+            debug_file = self._write_debug_task_markdown(task, properties, children)
+            logger.info(f"EVAL mode: task sample saved to {debug_file}")
         
         # Create page
         try:
