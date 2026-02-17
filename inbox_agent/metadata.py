@@ -5,7 +5,7 @@ from inbox_agent.pydantic_models import (
     MetadataConfig, ModelConfig, ActionType
 )
 from inbox_agent.config import settings
-from inbox_agent.notion import get_all_pages, get_block_plain_text, extract_property_value
+from inbox_agent.notion import get_block_plain_text, extract_property_value, query_pages_filtered
 from inbox_agent.utils import call_llm_with_json_response
 import json
 
@@ -194,7 +194,7 @@ Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, on
             JSON string of project titles
         """
         try:
-            projects_pages = get_all_pages(self.notion_client, settings.NOTION_PROJECTS_DATA_SOURCE_ID)
+            projects_pages = query_pages_filtered(self.notion_client, settings.NOTION_PROJECTS_DATA_SOURCE_ID)['results']
             logger.debug(f"Retrieved {len(projects_pages)} project pages from Notion")
             
             all_titles = [
@@ -215,7 +215,7 @@ Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, on
         # Get all project pages from data source
         try:
             # Putting try except pollutes the implementation code, so it may be better to ues it here
-            all_project_pages = get_all_pages(self.notion_client, settings.NOTION_PROJECTS_DATA_SOURCE_ID)
+            all_project_pages = query_pages_filtered(self.notion_client, settings.NOTION_PROJECTS_DATA_SOURCE_ID)['results']
         except Exception as e:
             logger.error(f"Failed to fetch projects from data source: {e}", exc_info=True)
             return metadata

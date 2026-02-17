@@ -13,40 +13,6 @@ def _get_cache_key(function_name: str, **kwargs) -> str:
     key = f"{function_name}:" + "|".join(f"{k}={v}" for k, v in sorted_params)
     return key
 
-def get_all_pages(client, data_source_id):
-    """
-    Fetch all pages from a Notion data source with caching.
-    Results are cached globally and expire when the script stops.
-    """
-    cache_key = _get_cache_key("get_all_pages", data_source_id=data_source_id)
-    
-    # Check cache
-    if cache_key in _notion_cache:
-        logger.debug(f"Cache HIT: {cache_key}")
-        return _notion_cache[cache_key]
-    
-    logger.debug(f"Cache MISS: {cache_key} - fetching from Notion API")
-    pages = []
-    start_cursor = None
-
-    while True:
-        response = client.data_sources.query(
-            data_source_id=data_source_id,
-            start_cursor=start_cursor,
-            page_size=100
-        )
-        pages.extend(response['results'])
-        if not response['has_more']:
-            break
-        start_cursor = response['next_cursor']
-
-    # Store in cache
-    _notion_cache[cache_key] = pages
-    logger.debug(f"Cached {len(pages)} pages for {cache_key}")
-    
-    return pages
-
-
 def get_inner_page_blocks(notion, page_id):
     """
     Fetch all blocks (children) of a Notion page with caching.

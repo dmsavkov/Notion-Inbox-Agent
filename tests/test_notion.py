@@ -6,7 +6,7 @@ import pytest
 from notion_client import Client
 from unittest.mock import Mock, patch
 from inbox_agent.config import settings
-from inbox_agent.notion import create_toggle_blocks, get_block_plain_text, get_all_pages, get_inner_page_blocks, query_pages_filtered, _notion_cache
+from inbox_agent.notion import create_toggle_blocks, get_block_plain_text, get_inner_page_blocks, query_pages_filtered, _notion_cache
 from inbox_agent.task import TaskManager
 from inbox_agent.pydantic_models import NotionTask, AIUseStatus
 
@@ -118,8 +118,8 @@ class TestNotionCaching:
         """Clear cache before each test"""
         _notion_cache.clear()
     
-    def test_get_all_pages_caches_results(self):
-        """Verify get_all_pages caches and reuses results"""
+    def test_query_all_pages_caches_results(self):
+        """Verify query_pages_filtered caches and reuses results with no filter"""
         mock_client = Mock()
         mock_client.data_sources.query.return_value = {
             'results': [{'id': '1', 'name': 'page1'}],
@@ -127,11 +127,11 @@ class TestNotionCaching:
         }
         
         # First call - API call
-        result1 = get_all_pages(mock_client, 'ds-123')
+        result1 = query_pages_filtered(mock_client, 'ds-123')['results']
         assert mock_client.data_sources.query.call_count == 1
         
         # Second call - should use cache, no new API call
-        result2 = get_all_pages(mock_client, 'ds-123')
+        result2 = query_pages_filtered(mock_client, 'ds-123')['results']
         assert mock_client.data_sources.query.call_count == 1  # Still 1, no new call
         assert result1 == result2
 
@@ -179,8 +179,8 @@ class TestNotionCaching:
             'has_more': False
         }
         
-        get_all_pages(mock_client, 'ds-111')
-        get_all_pages(mock_client, 'ds-222')
+        query_pages_filtered(mock_client, 'ds-111')
+        query_pages_filtered(mock_client, 'ds-222')
         
         # Two different data sources = two API calls
         assert mock_client.data_sources.query.call_count == 2
