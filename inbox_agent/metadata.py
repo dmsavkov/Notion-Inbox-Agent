@@ -34,20 +34,26 @@ class MetadataProcessor:
         """
         logger.info(f"Starting metadata processing for {len(notes)} notes")
         
-        # Fetch projects once for all batches
-        projects_info = self._get_projects_information()
+        # Fetch all projects (titles + metadata) once
+        all_projects_metadata = self._fetch_project_metadata()
+        
+        # Extract just titles for LLM classification
+        projects_info = json.dumps(list(all_projects_metadata.keys()))
         
         # Classify all notes in batches
         all_classifications = self._classify_notes_batched(notes, projects_info)
         
-        # Collect unique project names across all classifications
+        # Filter metadata to only referenced projects
         unique_projects = set()
         for classification in all_classifications:
             unique_projects.update(classification.projects)
         
-        # Fetch metadata once for all referenced projects
-        project_metadata = self._fetch_project_metadata(list(unique_projects))
-        logger.debug(f"Fetched metadata for {len(project_metadata)} unique projects")
+        project_metadata = {
+            name: all_projects_metadata[name]
+            for name in unique_projects
+            if name in all_projects_metadata
+        }
+        logger.debug(f"Using metadata for {len(project_metadata)} unique projects")
         
         # Build per-note MetadataResult
         results = []
@@ -186,52 +192,47 @@ Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, on
             logger.error(f"Batch classification failed: {e}", exc_info=True)
             raise
     
-    def _get_projects_information(self) -> str:
+    def _fetch_project_metadata(self, project_names: list[str] | None = None) -> dict[str, ProjectMetadata]:
         """
-        Query Notion Projects database and return all project titles as JSON.
+        Fetch project metadata from Notion.
+        
+        Args:
+            project_names: List of specific project names to fetch. If None, fetches all projects.
         
         Returns:
-            JSON string of project titles
+            Dict mapping project names to their metadata
         """
-        try:
-            projects_pages = query_pages_filtered(self.notion_client, settings.NOTION_PROJECTS_DATA_SOURCE_ID)['results']
-            logger.debug(f"Retrieved {len(projects_pages)} project pages from Notion")
-            
-            all_titles = [
-                get_block_plain_text(p) for p in projects_pages
-            ]
-            
-            logger.debug(f"Extracted {len(all_titles)} project titles")
-            return json.dumps(all_titles)
-            
-        except Exception as e:
-            logger.error(f"Failed to fetch projects information: {e}", exc_info=True)
-            raise
-    
-    def _fetch_project_metadata(self, project_names: list[str]) -> dict[str, ProjectMetadata]:
-        """Fetch and preprocess metadata for projects"""
         metadata = {}
         
-        # Get all project pages from data source
+        # Get all project pages with only necessary properties (filter at API level)
         try:
-            # Putting try except pollutes the implementation code, so it may be better to ues it here
-            all_project_pages = query_pages_filtered(self.notion_client, settings.NOTION_PROJECTS_DATA_SOURCE_ID)['results']
+            # Filter to retrieve only Name, Priority, Status, Type properties
+            filter_properties = ["Name", "Priority", "Status", "Type"]
+            all_project_pages = query_pages_filtered(
+                self.notion_client,
+                settings.NOTION_PROJECTS_DATA_SOURCE_ID,
+                filter_properties=filter_properties
+            )['results']
+            logger.debug(f"Retrieved {len(all_project_pages)} project pages from Notion")
         except Exception as e:
             logger.error(f"Failed to fetch projects from data source: {e}", exc_info=True)
             return metadata
         
-        # Build a map of project titles to pages for quick lookup
+        # Build a map of project titles to pages
         project_map = {}
         for page in all_project_pages:
             page_title = get_block_plain_text(page)
             if page_title:
                 project_map[page_title] = page
         
-        # Extract metadata for requested projects
-        for project_name in project_names:
+        # Extract metadata for requested projects (or all if None)
+        projects_to_process = project_names if project_names is not None else list(project_map.keys())
+        
+        for project_name in projects_to_process:
             try:
                 if project_name not in project_map:
-                    logger.warning(f"Project not found: {project_name}")
+                    if project_names is not None:  # Only warn if specific project was requested
+                        logger.warning(f"Project not found: {project_name}")
                     continue
                 
                 page = project_map[project_name]

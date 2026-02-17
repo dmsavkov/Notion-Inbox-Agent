@@ -46,47 +46,64 @@ def get_inner_page_blocks(notion, page_id):
     
     return blocks
 
-def query_pages_filtered(client, data_source_id, filter_dict=None):
+def query_pages_filtered(client, data_source_id, filter_dict=None, filter_properties=None):
     """
-    Query pages from a data source with optional filter, with caching.
-    Useful for finding specific pages by property (e.g., project by name).
+    Query pages from a data source with optional filter and property selection, with caching.
+    Paginates through all results automatically.
     Results are cached globally and expire when the script stops.
     
     Args:
         client: Notion client
         data_source_id: Data source ID to query
         filter_dict: Optional filter dict (e.g., {"property": "Name", "title": {"equals": "Project Name"}})
+        filter_properties: Optional list of property IDs to retrieve (reduces payload size)
     
     Returns:
-        Query results dict with 'results' list
+        Query results dict with 'results' list containing all pages
     """
-    # Create cache key from data_source_id and filter
+    # Create cache key from data_source_id, filter, and properties
     filter_key = str(filter_dict) if filter_dict else "no_filter"
-    cache_key = _get_cache_key("query_pages_filtered", data_source_id=data_source_id, filter=filter_key)
+    props_key = str(filter_properties) if filter_properties else "all_props"
+    cache_key = _get_cache_key("query_pages_filtered", data_source_id=data_source_id, filter=filter_key, props=props_key)
     
     # Check cache
     if cache_key in _notion_cache:
         logger.debug(f"Cache HIT: {cache_key}")
         return _notion_cache[cache_key]
     
-    logger.debug(f"Cache MISS: {cache_key} - fetching from Notion API")
+    logger.debug(f"Cache MISS: {cache_key} - fetching from Notion API with pagination")
     
-    # Make query
-    if filter_dict:
-        results = client.data_sources.query(
-            data_source_id,
-            filter=filter_dict
-        )
-    else:
-        results = client.data_sources.query(
-            data_source_id
-        )
+    # Paginate through all results
+    all_results = []
+    start_cursor = None
+    
+    while True:
+        # Build query params
+        query_params = {'page_size': 100}
+        if start_cursor:
+            query_params['start_cursor'] = start_cursor
+        if filter_dict:
+            query_params['filter'] = filter_dict
+        if filter_properties:
+            query_params['filter_properties'] = filter_properties
+        
+        # Make query
+        response = client.data_sources.query(data_source_id, **query_params)
+        
+        all_results.extend(response['results'])
+        
+        if not response.get('has_more'):
+            break
+        start_cursor = response.get('next_cursor')
+    
+    # Build final result
+    result = {'results': all_results, 'has_more': False}
     
     # Store in cache
-    _notion_cache[cache_key] = results
-    logger.debug(f"Cached query result for {cache_key}: {len(results.get('results', []))} items")
+    _notion_cache[cache_key] = result
+    logger.debug(f"Cached query result for {cache_key}: {len(all_results)} items")
     
-    return results
+    return result
 
 def get_block_plain_text(block):
     """Extract plain text from any Notion block, comment, page, icon, or cover."""
