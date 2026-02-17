@@ -254,8 +254,6 @@ Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, on
                     **{k: v for k, v in project_meta.dict().items() if v is not None and v != [] and v != ""}
                 )
                 
-                logger.debug(f"Fetched metadata for {project_name}: {list(metadata[project_name].dict().keys())}")
-                
             except Exception as e:
                 logger.error(f"Failed to extract metadata for {project_name}: {e}")
         
