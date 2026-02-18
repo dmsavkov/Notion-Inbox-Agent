@@ -260,5 +260,11 @@ reports/
 mlflow/
 logs/
 instructions/
-notebooks/
 output/results/
+
+notebooks/happy-path.ipynb
+notebooks/agent.ipynb
+notebooks/agent2.ipynb
+notebooks/agent-learning.ipynb
+notebooks/notion.ipynb
+notebooks/creating_holdout.ipynb
