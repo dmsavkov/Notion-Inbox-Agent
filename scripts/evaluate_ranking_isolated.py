@@ -28,7 +28,7 @@ build_root_logger()
 logger = logging.getLogger(__name__)
 
 # Global variable for evaluation directory
-EVAL_DIR_PATH = settings.PROJ_ROOT / "logs" / "eval_1"
+EVAL_DIR_PATH = settings.PROJ_ROOT / "logs" / "eval_2"
 
 
 def evaluate_ranking_isolated(eval_dir: Path, config=None) -> list[dict]:

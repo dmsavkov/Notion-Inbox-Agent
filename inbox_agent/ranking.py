@@ -126,6 +126,8 @@ Generate a concise title and evaluate on these scales:
 - confidence (0.0-1.0): How certain are you of this assessment?
 
 Rules:
+- Examine provided context: Vary scores based on how the note relates to specific projects and brainstorm insights
+- Reasoning must connect to brainstorm analysis or project context (not generic)
 - Default to LOW scores unless evidence strongly supports higher
 - Urgency is independent of importance
 - Most notes are importance=2, urgency=1-2, impact=10-30
