@@ -100,7 +100,7 @@ def evaluate_ranking_isolated(eval_dir: Path, config=None) -> list[dict]:
         
         # Save only ranking outputs (not ground truth or projects)
         results.append({
-            'title': ranking_result.title,
+            'title': title, # Have to reuse debug task title since I use titles to match notes
             'importance': ranking_result.importance,
             'urgency': ranking_result.urgency,
             'impact': ranking_result.impact,
