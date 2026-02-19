@@ -163,6 +163,7 @@ class NotionTask(BaseModel):
     urgency: int
     impact: int
     confidence: Optional[float] = None  # Optional; empty by default
+    reasoning: Optional[str] = None  # Judge's reasoning for ranking scores
     original_note: str
     enrichment: Optional[str] = None
     

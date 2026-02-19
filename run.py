@@ -91,6 +91,7 @@ def process_note(note: str, metadata_result: MetadataResult, config: Optional[Ap
         urgency=ranking_result.urgency,
         impact=ranking_result.impact,
         confidence=ranking_result.confidence,
+        reasoning=ranking_result.reasoning,
         original_note=note,
         enrichment=enrichment_result.enriched_text if enrichment_result else None
     )
@@ -127,6 +128,7 @@ def _create_do_now_task(note: str, metadata_result, notion_client, config: AppCo
         urgency=4,     # Max
         impact=100,    # Max
         confidence=metadata_result.classification.confidence_scores[0],
+        reasoning="No reasoning: ranking isn't applied for DO_NOW tasks. ",
         original_note=note,
         enrichment=None
     )
