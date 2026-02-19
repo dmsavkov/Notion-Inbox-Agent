@@ -4,7 +4,7 @@ import sys
 from typing import Optional
 import notion_client as notion_api
 from inbox_agent.pydantic_models import (
-    NotionTask, AppConfig, ActionType, AIUseStatus, MetadataResult
+    NotionTask, AppConfig, AIUseStatus, MetadataResult
 )
 from inbox_agent.config import settings
 from inbox_agent.metadata import MetadataProcessor
@@ -54,11 +54,10 @@ def process_note(note: str, metadata_result: MetadataResult, config: Optional[Ap
     logger.info("\n[Step 1/5] Metadata (pre-computed)")
     logger.info("-"*80)
     logger.info(f"Projects: {metadata_result.classification.projects}")
-    logger.info(f"Action: {metadata_result.classification.action}")
-    logger.info(f"DO_NOW: {metadata_result.is_do_now}")
+    logger.info(f"Do Now: {metadata_result.classification.do_now}")
     
     # Check DO_NOW bypass
-    if metadata_result.is_do_now:
+    if metadata_result.classification.do_now:
         logger.info("\nDO_NOW detected - bypassing ranking and enrichment")
         return _create_do_now_task(note, metadata_result, notion_client, config)
     
@@ -99,6 +98,7 @@ def process_note(note: str, metadata_result: MetadataResult, config: Optional[Ap
     task = NotionTask(
         title=ranking_result.title,
         projects=metadata_result.classification.projects,
+        do_now=metadata_result.classification.do_now,
         ai_use_status=ai_use_status,
         importance=ranking_result.importance,
         urgency=ranking_result.urgency,
@@ -133,6 +133,7 @@ def _create_do_now_task(note: str, metadata_result, notion_client, config: AppCo
     # TODO: max is hardcoded. Ok for now. 
     task = NotionTask(
         title=generate_default_title(note),
+        do_now=True,  # DO_NOW tasks always have do_now=True
         projects=metadata_result.classification.projects,
         ai_use_status=AIUseStatus.PROCESSED,  # DO_NOW always marked as processed
         importance=4,  # Max
@@ -173,7 +174,7 @@ def process_notes(notes: list[str], config: Optional[AppConfig] = None) -> list[
     
     logger.info(f"Metadata classification complete: {len(metadata_results)} results")
     for i, mr in enumerate(metadata_results):
-        logger.info(f"  Note {i}: {mr.classification.action.value} -> {mr.classification.projects}")
+        logger.info(f"  Note {i}: do_now={mr.classification.do_now} -> {mr.classification.projects}")
     
     # Step 2: Process each note with its pre-computed metadata
     results = []

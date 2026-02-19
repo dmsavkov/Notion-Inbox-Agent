@@ -5,7 +5,7 @@ Uses mocked Notion API, real LLM calls (if API keys present).
 import pytest
 from unittest.mock import Mock, patch
 from inbox_agent.pydantic_models import (
-    NotionTask, AppConfig, MetadataResult, NoteClassification, ActionType
+    NotionTask, AppConfig, MetadataResult, NoteClassification
 )
 from run import process_note, process_notes
 
@@ -16,18 +16,17 @@ SAMPLE_NOTES = {
 }
 
 
-def _make_metadata_result(action: str = "REFINE", is_do_now: bool = False) -> MetadataResult:
+def _make_metadata_result(do_now: bool = False) -> MetadataResult:
     """Helper to build a MetadataResult for tests."""
     return MetadataResult(
         classification=NoteClassification(
             note_id=0,
             projects=["Test Project"],
-            action=ActionType(action),
+            do_now=do_now,
             reasoning="Test classification",
             confidence_scores=[0.9, 0.8, 0.7]
         ),
-        project_metadata={},
-        is_do_now=is_do_now
+        project_metadata={}
     )
 
 
@@ -83,7 +82,7 @@ class TestPipelineIntegration:
         mock_client_class.return_value = mock_notion_client
         
         note = SAMPLE_NOTES["simple"]
-        metadata = _make_metadata_result("REFINE")
+        metadata = _make_metadata_result(do_now=False)
         result = process_note(note, metadata)
         
         # Verify result structure
@@ -100,7 +99,7 @@ class TestPipelineIntegration:
         mock_client_class.return_value = mock_notion_client
         
         note = SAMPLE_NOTES["urgent"]
-        metadata = _make_metadata_result("DO_NOW", is_do_now=True)
+        metadata = _make_metadata_result(do_now=True)
         result = process_note(note, metadata)
         
         assert isinstance(result, NotionTask)
@@ -117,8 +116,8 @@ class TestPipelineIntegration:
         # Mock batch metadata processor
         mock_processor = Mock()
         mock_processor.process.return_value = [
-            _make_metadata_result("REFINE"),
-            _make_metadata_result("DO_NOW", is_do_now=True),
+            _make_metadata_result(do_now=False),
+            _make_metadata_result(do_now=True),
         ]
         mock_metadata_class.return_value = mock_processor
         

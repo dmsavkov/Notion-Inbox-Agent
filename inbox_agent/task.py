@@ -103,6 +103,9 @@ class TaskManager:
                     "name": task.ai_use_status.value.lower()
                 }
             },
+            "Do Now": {
+                "checkbox": task.do_now
+            },
             "Status": {
                 "status": {
                     "name": "Not started" # Default status for new tasks

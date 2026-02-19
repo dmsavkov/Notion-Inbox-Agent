@@ -40,6 +40,7 @@ class TestNotionAPI:
         task = NotionTask(
             title="API Test Task - Delete Me",
             projects=[],
+            do_now=False,
             ai_use_status=AIUseStatus.PROCESSED,
             importance=2,
             urgency=1,

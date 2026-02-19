@@ -242,7 +242,7 @@ def _build_dummy_llm_response(messages: list[dict[str, str]]) -> Dict[str, Any]:
             classifications.append({
                 "note_id": i,
                 "projects": ["Test Project"],
-                "action": "REFINE",
+                "do_now": False,
                 "reasoning": f"Dummy metadata classification in TEST mode (note {i}).",
                 "confidence_scores": [0.82, 0.71, 0.64]
             })

@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 from inbox_agent.pydantic_models import (
     MetadataResult, NoteClassification, ProjectMetadata, 
-    MetadataConfig, ModelConfig, ActionType
+    MetadataConfig, ModelConfig
 )
 from inbox_agent.config import settings
 from inbox_agent.notion import get_block_plain_text, extract_property_value, query_pages_filtered
@@ -65,14 +65,12 @@ class MetadataProcessor:
                 if name in project_metadata
             }
             
-            is_do_now = self._is_do_now(classification)
-            if is_do_now:
+            if classification.do_now:
                 logger.info(f"Note {classification.note_id} classified as DO_NOW")
             
             results.append(MetadataResult(
                 classification=classification,
-                project_metadata=note_metadata,
-                is_do_now=is_do_now
+                project_metadata=note_metadata
             ))
         
         return results
@@ -101,7 +99,7 @@ class MetadataProcessor:
 Task:
 1. Semantic analysis: Extract core topic, keywords, entities for EACH note
 2. Project mapping: Match each note to top-3 relevant project titles
-3. Action classification: Determine cognitive state (DO_NOW/REFINE/EXECUTE)
+3. Do Now classification: Determine if this is an immediate action item (true/false)
 4. Confidence scoring: Assign calibrated scores [0.0-1.0]
 
 You will classify multiple notes in a single request. Process each independently.
@@ -116,16 +114,13 @@ Output strict JSON format."""
 {projects_info}
 </projects>
 
-<action_definitions>
-DO_NOW: Atomic execution tasks (2-10 min). Physical verbs, clear deliverable, binary completion.
-  Examples: "Create list", "Fix bug", "Update docs"
-
-REFINE: Semi-processed insights requiring synthesis. Lessons, principles, habits to internalize.
-  Examples: "Practice ego detachment", "Build habit of code review"
-
-EXECUTE: Fully processed reference material. Curated resources for later consumption.
-  Examples: "Article on microservices", "Video series on Kubernetes"
-</action_definitions>
+<do_now_definition>
+do_now: true/false
+  - TRUE only if: (1) Frictionless action < 2 min (logging takes longer than doing) OR (2) Critical emergency (catastrophic today consequences)
+    Examples: "Reply yes", "Pay invoice", "Database dropping connections", "Passport needed in 3 hours"
+  - FALSE for: ideas, philosophy, complex plans, non-urgent bugs, reference material
+  - DEFAULT to FALSE
+</do_now_definition>
 
 <notes_to_classify>
 {notes_section}</notes_to_classify>
@@ -136,7 +131,7 @@ Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, on
         {{
             "note_id": <index>,
             "projects": ["project1", "project2", "project3"],
-            "action": "DO_NOW|REFINE|EXECUTE",
+            "do_now": true|false,
             "reasoning": "brief explanation",
             "confidence_scores": [0.95, 0.85, 0.70]
         }}
@@ -185,7 +180,7 @@ Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, on
                 results.append(NoteClassification(
                     note_id=item.get("note_id", 0),
                     projects=projects,
-                    action=ActionType(item["action"]),
+                    do_now=item.get("do_now", False),
                     reasoning=item["reasoning"],
                     confidence_scores=scores
                 ))
@@ -201,7 +196,7 @@ Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, on
                     results.append(NoteClassification(
                         note_id=indices[len(results)],
                         projects=["Inbox"],
-                        action=ActionType.REFINE,
+                        do_now=False,
                         reasoning="Fallback: LLM did not return classification for this note.",
                         confidence_scores=[0.5]
                     ))
@@ -278,7 +273,3 @@ Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, on
                 logger.error(f"Failed to extract metadata for {project_name}: {e}")
         
         return metadata
-    
-    def _is_do_now(self, classification: NoteClassification) -> bool:
-        """Determine if note is DO_NOW based on action"""
-        return classification.action == ActionType.DO_NOW

@@ -18,6 +18,7 @@ class TestTaskProperties:
         task = NotionTask(
             title="Test Task",
             projects=["Test Project"],
+            do_now=False,
             ai_use_status=AIUseStatus.PROCESSED,
             importance=3,
             urgency=2,
@@ -44,6 +45,9 @@ class TestTaskProperties:
         assert "UseAIStatus" in properties
         assert properties["UseAIStatus"]["select"]["name"] == "processed"
         
+        assert "Do Now" in properties
+        assert properties["Do Now"]["checkbox"] == False
+        
         assert "Status" in properties
         assert properties["Status"]["status"]["name"] == "Not started"
     
@@ -55,6 +59,7 @@ class TestTaskProperties:
         task = NotionTask(
             title="Ambiguous Task",
             projects=[],
+            do_now=True,
             ai_use_status=AIUseStatus.AMBIGUOUS,
             importance=2,
             urgency=1,
@@ -65,6 +70,7 @@ class TestTaskProperties:
         properties = task_manager._build_properties(task)
         
         assert properties["UseAIStatus"]["select"]["name"] == "ambiguous"
+        assert properties["Do Now"]["checkbox"] == True
     
     def test_build_properties_without_project(self):
         """Test that properties work when no project is specified"""
@@ -74,6 +80,7 @@ class TestTaskProperties:
         task = NotionTask(
             title="No Project Task",
             projects=[],
+            do_now=False,
             ai_use_status=AIUseStatus.PROCESSED,
             importance=1,
             urgency=1,

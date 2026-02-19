@@ -25,13 +25,6 @@ class BatchNoteClassification(BaseModel):
         description="List of classifications, one per input note"
     )'''
 
-# Action types
-# REFACTORING TYPE?
-class ActionType(str, Enum):
-    DO_NOW = "DO_NOW"
-    REFINE = "REFINE"
-    EXECUTE = "EXECUTE"
-
 class AIUseStatus(str, Enum):
     PROCESSED = "processed"
     AMBIGUOUS = "ambiguous"
@@ -129,7 +122,7 @@ class NoteClassification(BaseModel):
     """Classification result from metadata module"""
     note_id: int
     projects: list[str]
-    action: ActionType
+    do_now: bool
     reasoning: str
     confidence_scores: list[float]
 
@@ -137,7 +130,6 @@ class MetadataResult(BaseModel):
     """Output from metadata.py"""
     classification: NoteClassification
     project_metadata: dict[str, ProjectMetadata]
-    is_do_now: bool
 
 class BrainstormResult(BaseModel):
     """Executor model brainstorming output"""
@@ -165,6 +157,7 @@ class NotionTask(BaseModel):
     """Complete task ready for Notion"""
     title: str
     projects: list[str]
+    do_now: bool
     ai_use_status: AIUseStatus
     importance: int
     urgency: int
