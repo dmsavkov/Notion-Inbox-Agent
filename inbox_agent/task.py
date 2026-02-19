@@ -7,6 +7,7 @@ from typing import Optional
 from inbox_agent.pydantic_models import NotionTask, AIUseStatus, TaskConfig
 from inbox_agent.notion import create_toggle_blocks, query_pages_filtered, get_block_plain_text
 from inbox_agent.config import settings
+from inbox_agent.logging_context import get_workflow_id
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ class TaskManager:
             mode = "TEST" if settings.IS_TEST_ENV else "DEBUG"
             logger.info(f"{mode} mode: task inspected and written to {debug_file}")
             return {
-                "id": f"debug-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                "id": get_workflow_id(),
                 "url": str(debug_file),
                 "properties": properties,
                 "children": children,

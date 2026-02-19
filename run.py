@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Optional
 import notion_client as notion_api
 from inbox_agent.pydantic_models import (
@@ -12,6 +13,7 @@ from inbox_agent.task import TaskManager
 from inbox_agent.utils import generate_default_title
 from inbox_agent.pydantic_models import DEFAULT_APP_CONFIG
 from inbox_agent.setup import build_root_logger
+from inbox_agent.logging_context import set_workflow_id
 
 build_root_logger()
 logger = logging.getLogger(__name__)
@@ -29,6 +31,10 @@ def process_note(note: str, metadata_result: MetadataResult, config: Optional[Ap
     Returns:
         NotionTask ready for Notion
     """
+    # Set temporary workflow ID (will be updated with page ID after creation)
+    workflow_id = str(uuid.uuid4())[:8]
+    set_workflow_id(workflow_id)
+    
     config = config or DEFAULT_APP_CONFIG # Note: avoids early binding
     logger.info("="*80)
     logger.info("Starting note processing workflow")

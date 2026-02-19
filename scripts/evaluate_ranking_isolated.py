@@ -100,6 +100,7 @@ def evaluate_ranking_isolated(eval_dir: Path, config=None) -> list[dict]:
         
         # Save only ranking outputs (not ground truth or projects)
         results.append({
+            'id': debug_task.get('id'),  # Use debug task ID for traceability
             'title': title, # Have to reuse debug task title since I use titles to match notes
             'importance': ranking_result.importance,
             'urgency': ranking_result.urgency,
