@@ -295,3 +295,24 @@ def generate_default_title(note: str, max_length: int = 80) -> str:
     
     return title or "Untitled Task"
 
+
+def load_tasks_from_json(json_file) -> list[dict]:
+    """
+    Generic loader for tasks from JSON file.
+    Works for both Notion tasks and debug tasks.
+    
+    Args:
+        json_file: Path-like object pointing to JSON file
+    
+    Returns:
+        List of task dictionaries, or empty list if file doesn't exist
+    """
+    from pathlib import Path
+    
+    json_file = Path(json_file)
+    if not json_file.exists():
+        return []
+    
+    with open(json_file, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
