@@ -17,23 +17,18 @@ import sys
 
 import notion_client as notion_api
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from inbox_agent.config import settings
 from inbox_agent.ranking import RankingProcessor
 from inbox_agent.metadata import MetadataProcessor
 from inbox_agent.pydantic_models import DEFAULT_APP_CONFIG
 from inbox_agent.utils import load_tasks_from_json
+from inbox_agent.setup import build_root_logger
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+build_root_logger()
 logger = logging.getLogger(__name__)
 
 # Global variable for evaluation directory
-EVAL_DIR_PATH = Path("data/processed/holdout_v1.7")  # Can be changed
+EVAL_DIR_PATH = settings.PROJ_ROOT / "logs" / "eval_1"
 
 
 def evaluate_ranking_isolated(eval_dir: Path, config=None) -> list[dict]:
@@ -92,9 +87,8 @@ def evaluate_ranking_isolated(eval_dir: Path, config=None) -> list[dict]:
         
         real_projects = notion_task.get('projects', [])
         if not real_projects:
-            logger.warning(f"No projects found for: {title}")
-            continue
-        
+            logger.debug(f"No projects found for: {title}")
+
         matched_count += 1
         
         # Fetch metadata for real projects (isolated: no LLM classification)
@@ -130,12 +124,16 @@ if __name__ == "__main__":
     # Run isolated ranking evaluation
     eval_dir = EVAL_DIR_PATH
     
+    config = DEFAULT_APP_CONFIG.model_copy()
+    config.ranking.executor_model.model_name = 'gemma-3-12b-it'
+    config.ranking.judge_model.model_name = 'gemma-3-27b-it'
+    
     logger.info("="*60)
     logger.info("ISOLATED RANKING EVALUATION")
     logger.info("="*60)
     logger.info(f"Evaluation directory: {eval_dir}")
     
-    results = evaluate_ranking_isolated(eval_dir)
+    results = evaluate_ranking_isolated(eval_dir, config=config)
     save_ranking_results(results, eval_dir)
     
     logger.info("="*60)

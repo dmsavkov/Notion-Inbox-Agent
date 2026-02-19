@@ -1,6 +1,4 @@
 import logging
-from pathlib import Path
-import sys
 from typing import Optional
 import notion_client as notion_api
 from inbox_agent.pydantic_models import (
@@ -13,20 +11,9 @@ from inbox_agent.enrichment import EnrichmentProcessor
 from inbox_agent.task import TaskManager
 from inbox_agent.utils import generate_default_title
 from inbox_agent.pydantic_models import DEFAULT_APP_CONFIG
+from inbox_agent.setup import build_root_logger
 
-# Setup logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/inbox_agent.log', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logging.getLogger("notion_client").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("openai").setLevel(logging.WARNING)
+build_root_logger()
 logger = logging.getLogger(__name__)
 
 def process_note(note: str, metadata_result: MetadataResult, config: Optional[AppConfig] = None) -> NotionTask:
