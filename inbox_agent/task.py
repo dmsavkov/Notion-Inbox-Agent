@@ -40,22 +40,18 @@ class TaskManager:
 
         # Handle TEST/DEBUG modes (no Notion creation)
         if is_debug_or_test:
-            self._validate_task_payload(properties, children)
-            debug_file = self._write_debug_task_markdown(task, properties, children)
+            debug_file = self._write_debug_task_json(task)
             mode = "TEST" if settings.IS_TEST_ENV else "DEBUG"
-            logger.info(f"{mode} mode: task inspected and written to {debug_file}")
+            logger.info(f"{mode} mode: task saved to {debug_file}")
             return {
-                "id": get_workflow_id(),
+                "id": get_workflow_id() or "unknown",
                 "url": str(debug_file),
-                "properties": properties,
-                "children": children,
                 "object": "debug_task"
             }
         
         # Handle EVAL mode (save to debug + create in Notion)
         if settings.IS_EVAL_ENV:
-            self._validate_task_payload(properties, children)
-            debug_file = self._write_debug_task_markdown(task, properties, children)
+            debug_file = self._write_debug_task_json(task)
             logger.info(f"EVAL mode: task sample saved to {debug_file}")
         
         # Create page
@@ -149,55 +145,28 @@ class TaskManager:
         
         return properties
 
-    def _validate_task_payload(self, properties: dict, children: list[dict]) -> None:
-        """Basic payload validation for TEST mode inspection."""
-        required_properties = ["Name", "Importance", "Urgency", "Impact Score", "UseAIStatus", "Status"]
-        missing = [prop for prop in required_properties if prop not in properties]
-        if missing:
-            raise ValueError(f"Missing required properties: {missing}")
-
-        if not children:
-            raise ValueError("Task content blocks are empty")
-
-        if properties["Name"].get("title") is None:
-            raise ValueError("Name.title is missing")
-
-    def _write_debug_task_markdown(self, task: NotionTask, properties: dict, children: list[dict]) -> Path:
-        """Write TEST-mode task payload to logs/debug_tasks/<title>.md."""
+    def _write_debug_task_json(self, task: NotionTask) -> Path:
+        """Write debug task to pure JSON file (TEST/DEBUG/EVAL modes)."""
         settings.DEBUG_TASKS_DIR.mkdir(parents=True, exist_ok=True)
 
         safe_title = re.sub(r"[^a-zA-Z0-9 _-]", "", task.title).strip().replace(" ", "_")
         if not safe_title:
             safe_title = "untitled_task"
 
-        file_path = settings.DEBUG_TASKS_DIR / f"{safe_title}.md"
+        file_path = settings.DEBUG_TASKS_DIR / f"{safe_title}.json"
         if file_path.exists():
             suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_path = settings.DEBUG_TASKS_DIR / f"{safe_title}_{suffix}.md"
+            file_path = settings.DEBUG_TASKS_DIR / f"{safe_title}_{suffix}.json"
 
-        content = [
-            f"# {task.title}",
-            "",
-            f"- Created (debug): {datetime.now().isoformat()}",
-            f"- Environment: {settings.RUNTIME_MODE}",
-            "",
-            "## Task Model",
-            "```json",
-            json.dumps(task.model_dump(), indent=2, ensure_ascii=False),
-            "```",
-            "",
-            "## Notion Properties Payload",
-            "```json",
-            json.dumps(properties, indent=2, ensure_ascii=False),
-            "```",
-            "",
-            "## Notion Children Payload",
-            "```json",
-            json.dumps(children, indent=2, ensure_ascii=False),
-            "```",
-        ]
+        # Build debug task JSON with metadata
+        debug_task = {
+            "id": get_workflow_id() or "unknown",
+            "created_time": datetime.now().isoformat(),
+            "environment": settings.RUNTIME_MODE,
+            **task.model_dump()
+        }
 
-        file_path.write_text("\n".join(content), encoding="utf-8")
+        file_path.write_text(json.dumps(debug_task, indent=2, ensure_ascii=False), encoding="utf-8")
         return file_path
     
     def _build_content_blocks(self, task: NotionTask) -> list[dict]:
