@@ -6,7 +6,7 @@ import pytest
 from notion_client import Client
 from unittest.mock import Mock, patch
 from inbox_agent.config import settings
-from inbox_agent.notion import create_toggle_blocks, get_block_plain_text, get_inner_page_blocks, query_pages_filtered, _notion_cache
+from inbox_agent.notion import create_toggle_blocks, get_block_plain_text, get_inner_page_blocks, query_pages_filtered, _notion_cache, extract_property_value
 from inbox_agent.task import TaskManager
 from inbox_agent.pydantic_models import NotionTask, AIUseStatus
 
@@ -109,6 +109,137 @@ class TestBlockTextExtraction:
     def test_extract_from_empty_block(self):
         assert get_block_plain_text(None) == ''
         assert get_block_plain_text({'type': 'divider'}) == ''
+    
+    @pytest.mark.parametrize("block_input,expected", [
+        # None and empty cases
+        (None, ''),
+        ({}, ''),
+        ({'type': 'divider'}, ''),
+        
+        # Text block
+        ({'type': 'text', 'plain_text': 'Direct text'}, 'Direct text'),
+        
+        # Comment
+        ({'type': 'comment', 'rich_text': [{'plain_text': 'Comment text'}]}, 'Comment text'),
+        ({'object': 'comment', 'rich_text': [{'plain_text': 'Another comment'}]}, 'Another comment'),
+        
+        # Page with title
+        ({
+            'type': 'page',
+            'object': 'page',
+            'properties': {'Name': {'title': [{'plain_text': 'Page Title'}]}}
+        }, 'Page Title'),
+        
+        # Emoji icon
+        ({'type': 'emoji', 'emoji': '🎉'}, '🎉'),
+        
+        # File
+        ({'type': 'file', 'file': {'url': 'https://example.com/file.pdf'}}, 'https://example.com/file.pdf'),
+        
+        # External
+        ({'type': 'external', 'external': {'url': 'https://example.com/image.jpg'}}, 'https://example.com/image.jpg'),
+        
+        # Child page
+        ({'type': 'child_page', 'child_page': {'title': 'Subpage Title'}}, 'Subpage Title'),
+        
+        # Child database
+        ({'type': 'child_database', 'child_database': {'title': 'Database Title'}}, 'Database Title'),
+        
+        # Multiple rich text items
+        ({
+            'type': 'paragraph',
+            'paragraph': {
+                'rich_text': [
+                    {'plain_text': 'First '},
+                    {'plain_text': 'Second '},
+                    {'plain_text': 'Third'}
+                ]
+            }
+        }, 'First Second Third'),
+    ])
+    def test_get_block_plain_text_various_types(self, block_input, expected):
+        """Test get_block_plain_text with various block types"""
+        assert get_block_plain_text(block_input) == expected
+
+
+@pytest.mark.unit
+class TestPropertyValueExtraction:
+    """Unit tests for property value extraction"""
+    
+    @pytest.mark.parametrize("prop_input,expected", [
+        # None and invalid cases
+        (None, None),
+        ({}, None),
+        ({'type': 'unknown_type'}, None),
+        ("not a dict", None),
+        
+        # Title property
+        ({'type': 'title', 'title': [{'plain_text': 'Task Title'}]}, 'Task Title'),
+        ({'type': 'title', 'title': [{'plain_text': 'Part 1'}, {'plain_text': ' Part 2'}]}, 'Part 1 Part 2'),
+        ({'type': 'title', 'title': []}, ''),
+        
+        # Rich text property
+        ({'type': 'rich_text', 'rich_text': [{'plain_text': 'Rich content'}]}, 'Rich content'),
+        ({'type': 'rich_text', 'rich_text': []}, ''),
+        
+        # Number property
+        ({'type': 'number', 'number': 42}, 42),
+        ({'type': 'number', 'number': 3.14}, 3.14),
+        ({'type': 'number', 'number': 0}, 0),
+        ({'type': 'number', 'number': None}, None),
+        
+        # Select property
+        ({'type': 'select', 'select': {'name': 'Option A'}}, 'Option A'),
+        ({'type': 'select', 'select': None}, None),
+        
+        # Multi-select property
+        ({'type': 'multi_select', 'multi_select': [{'name': 'Tag1'}, {'name': 'Tag2'}]}, ['Tag1', 'Tag2']),
+        ({'type': 'multi_select', 'multi_select': []}, []),
+        
+        # Checkbox property
+        ({'type': 'checkbox', 'checkbox': True}, True),
+        ({'type': 'checkbox', 'checkbox': False}, False),
+        
+        # URL property
+        ({'type': 'url', 'url': 'https://example.com'}, 'https://example.com'),
+        ({'type': 'url', 'url': None}, None),
+        
+        # Email property
+        ({'type': 'email', 'email': 'test@example.com'}, 'test@example.com'),
+        
+        # Phone property
+        ({'type': 'phone_number', 'phone_number': '+1234567890'}, '+1234567890'),
+        
+        # Date property with start only
+        ({'type': 'date', 'date': {'start': '2026-02-20'}}, '2026-02-20'),
+        
+        # Date property with start and end
+        ({'type': 'date', 'date': {'start': '2026-02-20', 'end': '2026-02-25'}}, {'start': '2026-02-20', 'end': '2026-02-25'}),
+        
+        # Date property empty
+        ({'type': 'date', 'date': None}, None),
+        
+        # People property
+        ({'type': 'people', 'people': [{'name': 'Alice'}, {'name': 'Bob'}]}, ['Alice', 'Bob']),
+        ({'type': 'people', 'people': [{'id': 'user-123'}]}, ['user-123']),
+        
+        # Files property
+        ({'type': 'files', 'files': [{'name': 'doc.pdf'}]}, ['doc.pdf']),
+        
+        # Formula property
+        ({'type': 'formula', 'formula': {'type': 'string', 'string': 'Result'}}, 'Result'),
+        ({'type': 'formula', 'formula': {'type': 'number', 'number': 100}}, 100),
+        
+        # Relation property
+        ({'type': 'relation', 'relation': [{'id': 'page-1'}, {'id': 'page-2'}]}, ['page-1', 'page-2']),
+        
+        # Rollup property
+        ({'type': 'rollup', 'rollup': {'type': 'number', 'number': 5}}, 5),
+        ({'type': 'rollup', 'rollup': {'type': 'array', 'array': [1, 2, 3]}}, [1, 2, 3]),
+    ])
+    def test_extract_property_value_various_types(self, prop_input, expected):
+        """Test extract_property_value with various property types"""
+        assert extract_property_value(prop_input) == expected
 
 
 @pytest.mark.unit
