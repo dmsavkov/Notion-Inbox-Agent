@@ -5,6 +5,7 @@ from inbox_agent.pydantic_models import (
     RankingResult, BrainstormResult, RankingConfig, ProjectMetadata
 )
 from inbox_agent.utils import call_llm_with_json_response, generate_default_title
+from inbox_agent.artifact_logger import log_llm_artifact
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,12 @@ Return ONLY valid JSON:
             )
             
             logger.debug(f"Executor response: {str(data)[:200]}...")
-            return BrainstormResult(**data)
+            brainstorm_result = BrainstormResult(**data)
+            
+            # Log artifact for tracing
+            log_llm_artifact(brainstorm_result, "ranking_brainstorm")
+            
+            return brainstorm_result
             
         except Exception as e:
             logger.error(f"Brainstorming failed: {e}", exc_info=True)
@@ -152,7 +158,12 @@ Return ONLY valid JSON:
             )
             
             logger.debug(f"Judge response: {data}")
-            return RankingResult(**data)
+            ranking_result = RankingResult(**data)
+            
+            # Log artifact for tracing
+            log_llm_artifact(ranking_result, "ranking_judge")
+            
+            return ranking_result
             
         except Exception as e:
             logger.error(f"Ranking failed: {e}", exc_info=True)

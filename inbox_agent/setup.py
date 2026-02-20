@@ -4,6 +4,7 @@ import logging
 import sys
 from inbox_agent.config import settings
 from inbox_agent.logging_context import WorkflowIdFilter
+from inbox_agent.artifact_logger import setup_artifact_logger
 
 def build_root_logger(log_file_path: Optional[str | Path] = None) -> None:
     if log_file_path is None:
@@ -23,6 +24,9 @@ def build_root_logger(log_file_path: Optional[str | Path] = None) -> None:
         format='%(asctime)s - [%(workflow_id)s] - %(name)s - %(levelname)s - %(message)s',
         handlers=[file_handler, stream_handler]
     )
+    
+    # Setup artifact logger for LLM traces
+    setup_artifact_logger()
     
     logging.getLogger("notion_client").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)

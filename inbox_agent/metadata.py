@@ -7,6 +7,7 @@ from inbox_agent.pydantic_models import (
 from inbox_agent.config import settings
 from inbox_agent.notion import get_block_plain_text, extract_property_value, query_pages_filtered
 from inbox_agent.utils import call_llm_with_json_response
+from inbox_agent.artifact_logger import log_llm_artifact
 import json
 
 logger = logging.getLogger(__name__)
@@ -184,6 +185,9 @@ Return ONLY valid JSON. You MUST return exactly {len(batch)} classifications, on
                     reasoning=item["reasoning"],
                     confidence_scores=scores
                 ))
+                
+                # Log artifact for tracing
+                log_llm_artifact(results[-1], "metadata_classification")
             
             # Ensure we got the right number of classifications
             if len(results) != len(batch):

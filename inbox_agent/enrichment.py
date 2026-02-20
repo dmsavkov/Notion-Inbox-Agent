@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 from inbox_agent.pydantic_models import EnrichmentResult, EnrichmentConfig
 from inbox_agent.utils import call_llm_with_json_response
+from inbox_agent.artifact_logger import log_llm_artifact
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +81,15 @@ Return ONLY valid JSON:
             
             logger.debug(f"Enrichment response: {str(data)[:200]}...")
             
-            return EnrichmentResult(
+            enrichment_result = EnrichmentResult(
                 lenses_used=data["lenses_used"],
                 enriched_text=data["enriched_text"]
             )
+            
+            # Log artifact for tracing
+            log_llm_artifact(enrichment_result, "enrichment")
+            
+            return enrichment_result
             
         except Exception as e:
             logger.error(f"Enrichment failed: {e}", exc_info=True)
